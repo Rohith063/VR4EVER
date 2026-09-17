@@ -115,7 +115,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
   onOpenLocation,
 }) => {
   const { user } = useAuth();
-  const { relationship, partnerProfile, isPartnerOnline, isDemoMode } = useRelationship();
+  const { relationship, partnerProfile, isPartnerOnline } = useRelationship();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -210,53 +210,6 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
   const partnerName =
     relationship?.custom_nickname_2 || partnerProfile?.display_name || 'Partner';
 
-  // Companion auto-reply simulator for Demo Mode
-  const triggerDemoCompanionReply = (userMsgType: MessageType, textContent: string) => {
-    if (!relationship) return;
-
-    setTimeout(() => {
-      const replies = [
-        "Aww, you always make my day! 🥰💛",
-        "Listening right now, love this so much! ✨",
-        "Can't wait to see you later today! 💕",
-        "You're the sweetest! Sending you the biggest hug! 🫂",
-        "Checking this out right now! ☕",
-        "Haha that is so cute! 😂💖",
-      ];
-
-      let replyContent = replies[Math.floor(Math.random() * replies.length)];
-      if (userMsgType === 'audio') {
-        replyContent = `Aww, hearing your voice gave me butterflies! 🎙️💛`;
-      } else if (userMsgType === 'image') {
-        replyContent = `You look stunning! Saving this photo immediately 📸✨`;
-      } else if (userMsgType === 'video') {
-        replyContent = `OMG love this video clip! 🎥🍿`;
-      } else if (userMsgType === 'file') {
-        replyContent = `Got the document! Reviewing it right now 📄👍`;
-      } else if (textContent.toLowerCase().includes('love')) {
-        replyContent = `I love you more than words can say! 💖💍`;
-      }
-
-      const botMsg: Message = {
-        id: crypto.randomUUID(),
-        relationship_id: relationship.id,
-        sender_id: 'partner',
-        type: 'text',
-        content: replyContent,
-        media_url: null,
-        metadata: null,
-        is_read: true,
-        created_at: new Date().toISOString(),
-      };
-
-      setMessages((prev) => {
-        const updated = [...prev, botMsg];
-        localStorage.setItem(`${LOCAL_CHAT_KEY}_${relationship.id}`, JSON.stringify(updated));
-        return updated;
-      });
-    }, 1200);
-  };
-
   const sendMessage = async (
     type: MessageType = 'text',
     content: string = inputText,
@@ -292,10 +245,7 @@ export const ChatDrawer: React.FC<ChatDrawerProps> = ({
     setIsRecordingVoice(false);
     setSending(true);
 
-    // If demo mode or offline, trigger simulated partner reply
-    if (isDemoMode || !user) {
-      triggerDemoCompanionReply(type, content);
-    } else {
+    if (user) {
       try {
         await supabase.from('messages').insert([newMsg]);
       } catch (err) {

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Heart, Sparkles, Mail, Lock, User, ArrowRight, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Heart, Mail, Lock, User, ArrowRight, AlertCircle, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const AuthPage: React.FC = () => {
   const navigate = useNavigate();
-  const { signIn, signUp, signInAsGuest } = useAuth();
+  const { signIn, signUp } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -52,13 +52,6 @@ export const AuthPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGuestEntry = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const guestName = displayName.trim() || 'Lovebird';
-    signInAsGuest(guestName);
-    navigate('/');
   };
 
   return (
@@ -212,19 +205,6 @@ export const AuthPage: React.FC = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-
-          {/* Quick Demo / Zero-Config Guest Option */}
-          <div className="pt-2 border-t border-white/10 text-center space-y-3">
-            <p className="text-xs text-white/40">Want to explore right now without signing up?</p>
-            <button
-              type="button"
-              onClick={handleGuestEntry}
-              className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/15 text-white/80 hover:text-white text-xs font-medium flex items-center justify-center gap-2 transition-all cursor-pointer"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Instant Demo / Continue as Guest</span>
-            </button>
-          </div>
         </div>
 
         {/* Security badge */}
