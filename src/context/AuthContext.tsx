@@ -10,6 +10,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (email: string, password: string, displayName: string, username?: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
   signInAsGuest: (name?: string) => void;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Profile>) => Promise<void>;
@@ -24,7 +25,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  const fetchProfile = async (userId: string, email?: string) => {
+  const fetchProfile = async (
+    userId: string,
+    email?: string,
+    metadata?: Record<string, unknown>
+  ) => {
     try {
       const { data } = await supabase
         .from('profiles')
@@ -35,20 +40,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data) {
         setProfile(data as Profile);
       } else {
-        // Fallback default profile if table doesn't exist yet or user row missing
-        const fallbackProfile: Profile = {
+        // Fallback default profile from user metadata (e.g. Google OAuth or email)
+        const metaName =
+          (metadata?.full_name as string) ||
+          (metadata?.name as string) ||
+          (metadata?.display_name as string);
+        const displayName = metaName || (email ? email.split('@')[0] : 'User');
+        const username = (
+          email ? email.split('@')[0] : 'user_' + userId.slice(0, 5)
+        )
+          .toLowerCase()
+          .replace(/\s+/g, '_');
+        const avatarUrl =
+          (metadata?.avatar_url as string) ||
+          (metadata?.picture as string) ||
+          null;
+
+        const newProfile: Profile = {
           id: userId,
           email: email || '',
-          username: email ? email.split('@')[0] : 'user',
-          display_name: email ? email.split('@')[0] : 'User',
+          username,
+          display_name: displayName,
+          avatar_url: avatarUrl,
           is_online: true,
           last_seen: new Date().toISOString(),
         };
-        setProfile(fallbackProfile);
+
+        try {
+          await supabase.from('profiles').insert([newProfile]);
+        } catch {
+          // ignore if table doesn't exist yet or RLS prevents direct insert
+        }
+
+        setProfile(newProfile);
       }
     } catch {
       // Local fallback for offline/demo mode
-      const localName = localStorage.getItem('4ever_username') || (email ? email.split('@')[0] : 'User');
+      const metaName =
+        (metadata?.full_name as string) || (metadata?.name as string);
+      const localName =
+        localStorage.getItem('4ever_username') ||
+        metaName ||
+        (email ? email.split('@')[0] : 'User');
       setProfile({
         id: userId,
         email: email || '',
@@ -65,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id, session.user.email);
+        fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
       } else {
         const storedGuest = localStorage.getItem('4ever_guest_user');
         if (storedGuest) {
@@ -90,7 +123,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id, session.user.email);
+        fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
       } else {
         setProfile(null);
       }
@@ -110,8 +143,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (error) return { error };
       if (data.user) {
-        await fetchProfile(data.user.id, data.user.email);
+        await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
       }
+      return { error: null };
+    } catch (err: unknown) {
+      return { error: err as Error };
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/`,
+        },
+      });
+      if (error) return { error };
       return { error: null };
     } catch (err: unknown) {
       return { error: err as Error };
@@ -136,7 +184,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (data.user) {
         localStorage.setItem('4ever_username', displayName);
-        await fetchProfile(data.user.id, data.user.email);
+        await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
       }
       return { error: null };
     } catch (err: unknown) {
@@ -194,7 +242,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = async () => {
     if (user) {
-      await fetchProfile(user.id, user.email);
+      await fetchProfile(user.id, user.email, user.user_metadata);
     }
   };
 
@@ -207,6 +255,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         signIn,
         signUp,
+        signInWithGoogle,
         signInAsGuest,
         signOut,
         updateProfile,
