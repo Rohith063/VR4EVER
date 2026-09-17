@@ -21,6 +21,49 @@ const CURRENT_PROFILE_KEY = '4ever_current_profile';
 export const REGISTERED_PROFILES_KEY = '4ever_registered_profiles_v1';
 export const TOMBSTONE_KEY = '4ever_deleted_users_tombstone_v1';
 export const ACTIVE_AUTH_USER_KEY = '4ever_active_auth_user_v1';
+export const FACTORY_RESET_VERSION_KEY = '4ever_clean_reset_v9';
+
+export const resetAllPlatformUserData = () => {
+  try {
+    const keysToRemove = [
+      CURRENT_PROFILE_KEY,
+      REGISTERED_PROFILES_KEY,
+      TOMBSTONE_KEY,
+      ACTIVE_AUTH_USER_KEY,
+      '4ever_guest_user',
+      '4ever_username',
+      '4ever_relationship_v1',
+      '4ever_all_relationships_v1',
+      '4ever_my_pair_code',
+      '4ever_relationship_requests_v1',
+      '4ever_real_dm_msgs_v4',
+      '4ever_real_posts_v4',
+      '4ever_chat_threads_v4',
+      '4ever_real_users_v4',
+      '4ever_cms_users_cache_v4',
+      '4ever_cms_rels_cache_v4',
+      '4ever_cms_posts_cache_v4',
+    ];
+
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('4ever_profile_') || key.startsWith('sb-') || key.includes('user_profile'))) {
+        localStorage.removeItem(key);
+      }
+    }
+
+    localStorage.setItem(FACTORY_RESET_VERSION_KEY, 'done');
+  } catch (err) {
+    console.error('Failed to factory reset user data:', err);
+  }
+};
+
+// Auto-execute clean slate on first boot of this version
+if (typeof window !== 'undefined' && localStorage.getItem(FACTORY_RESET_VERSION_KEY) !== 'done') {
+  resetAllPlatformUserData();
+}
 
 export const saveToRegisteredProfiles = (p: Profile) => {
   try {

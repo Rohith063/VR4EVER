@@ -34,6 +34,7 @@ import {
   REGISTERED_PROFILES_KEY,
   TOMBSTONE_KEY,
   saveToRegisteredProfiles,
+  resetAllPlatformUserData,
 } from '../context/AuthContext';
 import type {
   AdminUserRecord,
@@ -139,6 +140,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [isLoadingLive, setIsLoadingLive] = useState<boolean>(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('Never');
   const [supabaseConnected, setSupabaseConnected] = useState<boolean>(true);
+  const [schemaNeedsExecution, setSchemaNeedsExecution] = useState<boolean>(false);
 
   // Search and Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -369,6 +371,14 @@ export const AdminDashboardPage: React.FC = () => {
         }
       } catch {}
 
+      // Verify live Supabase cloud connectivity
+      try {
+        const { error: pingError } = await supabase.from('relationships').select('id').limit(1);
+        connected = !pingError || (pingError.code !== 'PGRST301' && pingError.code !== 'ECONNREFUSED');
+      } catch {
+        connected = false;
+      }
+
       // E. 1. Fetch live Profiles table from Supabase
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
@@ -376,6 +386,7 @@ export const AdminDashboardPage: React.FC = () => {
         .order('created_at', { ascending: false });
 
       if (!profilesError && profilesData && profilesData.length > 0) {
+        setSchemaNeedsExecution(false);
         profilesData.forEach((p: Profile) => {
           if (isPurged(p.id, p.email, p.username)) return;
           const existing = usersMap.get(p.id);
@@ -388,8 +399,9 @@ export const AdminDashboardPage: React.FC = () => {
             email: p.email || existing?.email || 'No email provided',
           });
         });
-      } else if (profilesError) {
-        connected = false;
+      } else if (profilesError && profilesError.code === 'PGRST205') {
+        // Table 'profiles' not yet created in Supabase SQL Editor
+        setSchemaNeedsExecution(true);
       }
 
       const mergedUsers = Array.from(usersMap.values()).filter(
@@ -487,6 +499,62 @@ export const AdminDashboardPage: React.FC = () => {
     if (currentStaff) {
       fetchAllLiveData();
     }
+  }, [currentStaff]);
+
+  // Live Supabase Realtime Listener for real-time user registrations & posts
+  useEffect(() => {
+    if (!currentStaff) return;
+
+    const channel = supabase.channel('4ever_cms_realtime_sync');
+    channel
+      .on('broadcast', { event: 'user_presence' }, (payload) => {
+        const p = payload.payload as Profile;
+        if (p && p.id) {
+          setUsers((prev) => {
+            const exists = prev.some((u) => u.id === p.id || (p.email && u.email.toLowerCase() === p.email.toLowerCase()));
+            if (!exists) {
+              const newRec: AdminUserRecord = {
+                id: p.id,
+                display_name: p.display_name || 'User',
+                username: p.username || 'user',
+                email: p.email || 'No email provided',
+                avatar_url: p.avatar_url || null,
+                cover_url: p.cover_url || null,
+                bio: p.bio || null,
+                role: 'user',
+                storage_used_mb: 12,
+                storage_limit_mb: 100,
+                is_online: true,
+                is_banned: false,
+                last_seen: 'Online Live Now',
+                created_at: p.created_at || new Date().toISOString(),
+              };
+              const updated = [newRec, ...prev];
+              localStorage.setItem(CMS_USERS_CACHE_KEY, JSON.stringify(updated));
+              saveToRegisteredProfiles(p);
+              return updated;
+            }
+            return prev.map((u) => (u.id === p.id ? { ...u, is_online: true, last_seen: 'Online Live Now' } : u));
+          });
+        }
+      })
+      .on('broadcast', { event: 'feed_post_created' }, (payload) => {
+        const post = payload.payload as FeedPost;
+        if (post && post.id) {
+          setPosts((prev) => [post, ...prev.filter((item) => item.id !== post.id)]);
+        }
+      })
+      .on('broadcast', { event: 'couple_request' }, () => {
+        fetchAllLiveData();
+      })
+      .on('broadcast', { event: 'couple_accepted' }, () => {
+        fetchAllLiveData();
+      })
+      .subscribe();
+
+    return () => {
+      channel.unsubscribe();
+    };
   }, [currentStaff]);
 
   // -------------------------------------------------------------
@@ -824,6 +892,30 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
+  const handleFactoryResetUsers = async () => {
+    if (
+      confirm(
+        '⚠️ RESET ALL USER DATA CONFIRMATION:\n\n' +
+        'This will completely purge all registered user profiles, messages, relationships, and posts across the entire platform.\n\n' +
+        'Platform Administrator credentials and Master PIN will remain intact.\n\n' +
+        'Are you sure you want to reset all user data?'
+      )
+    ) {
+      setIsLoadingLive(true);
+      resetAllPlatformUserData();
+      setUsers([]);
+      setRelationships([]);
+      setPosts([]);
+      setTotalMessagesCount(0);
+      try {
+        await supabase.auth.signOut();
+      } catch {}
+      setIsLoadingLive(false);
+      confetti({ particleCount: 70, spread: 60, colors: ['#ef4444', '#f59e0b', '#6366f1'] });
+      alert('All past user data has been completely wiped. The platform is now starting fresh from zero.');
+    }
+  };
+
   const handleCreatePairing = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pairUser1 || !pairUser2 || pairUser1 === pairUser2) {
@@ -1074,6 +1166,37 @@ create table if not exists public.posts (
 alter table public.posts enable row level security;
 drop policy if exists "Posts are accessible" on public.posts;
 create policy "Posts are accessible" on public.posts for all using (true) with check (true);
+
+-- Messages Table
+create table if not exists public.messages (
+  id text primary key,
+  relationship_id text,
+  sender_id text,
+  type text default 'text',
+  content text,
+  media_url text,
+  metadata jsonb default '{}'::jsonb,
+  is_read boolean default false,
+  created_at timestamptz default now()
+);
+alter table public.messages enable row level security;
+drop policy if exists "Messages are accessible" on public.messages;
+create policy "Messages are accessible" on public.messages for all using (true) with check (true);
+
+-- Relationship Requests Table
+create table if not exists public.relationship_requests (
+  id text primary key,
+  sender_id text,
+  receiver_id text,
+  relation_type text default 'couple',
+  status text default 'pending',
+  message text,
+  pair_code text,
+  created_at timestamptz default now()
+);
+alter table public.relationship_requests enable row level security;
+drop policy if exists "Requests are accessible" on public.relationship_requests;
+create policy "Requests are accessible" on public.relationship_requests for all using (true) with check (true);
 `;
     navigator.clipboard.writeText(sql);
     setSqlCopiedNotice(true);
@@ -1327,6 +1450,17 @@ create policy "Posts are accessible" on public.posts for all using (true) with c
             <span className="hidden sm:inline">{isLoadingLive ? 'Syncing...' : 'Sync Live DB'}</span>
           </button>
 
+          <button
+            type="button"
+            onClick={handleFactoryResetUsers}
+            disabled={isLoadingLive}
+            className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            title="Wipe all past user data and start completely fresh"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span className="hidden sm:inline">Reset All Users</span>
+          </button>
+
           {/* Current Staff Badge & Logout */}
           <div className="flex items-center gap-2 pl-2 border-l border-[#262b3a]">
             <div className="text-right hidden md:block">
@@ -1344,6 +1478,35 @@ create policy "Posts are accessible" on public.posts for all using (true) with c
           </div>
         </div>
       </header>
+
+      {/* Cloud Schema Notice Banner */}
+      {schemaNeedsExecution && (
+        <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 sm:px-6 py-2.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2 text-amber-300">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+            <span>
+              <strong>Supabase Cloud Live & Connected!</strong> Run the SQL schema once in your Supabase SQL Editor to enable PostgreSQL cloud persistence for profiles & messages.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={copySupabaseSqlSnippet}
+              className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 font-semibold cursor-pointer transition-colors"
+            >
+              {sqlCopiedNotice ? 'Copied SQL!' : 'Copy SQL Script'}
+            </button>
+            <a
+              href="https://supabase.com/dashboard/project/rjffxowpstgvnpikoyne/sql/new"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold cursor-pointer transition-colors flex items-center gap-1"
+            >
+              <span>Open Supabase SQL Editor</span>
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* Main App Container with Sidebar & Content */}
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
@@ -1661,14 +1824,25 @@ create policy "Posts are accessible" on public.posts for all using (true) with c
                   <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">User Management</h2>
                   <p className="text-xs text-slate-400">All registered profiles stored in Supabase</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setCreateUserModalOpen(true)}
-                  className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/30 cursor-pointer w-fit"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create User</span>
-                </button>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={handleFactoryResetUsers}
+                    className="px-3.5 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                    title="Wipe all past user data and start completely fresh"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Reset All User Data</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreateUserModalOpen(true)}
+                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-md shadow-indigo-600/30 cursor-pointer w-fit"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Create User</span>
+                  </button>
+                </div>
               </div>
 
               {/* Filters Bar */}
