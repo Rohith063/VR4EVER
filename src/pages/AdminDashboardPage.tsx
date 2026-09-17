@@ -30,6 +30,11 @@ import {
   Upload,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import {
+  REGISTERED_PROFILES_KEY,
+  TOMBSTONE_KEY,
+  saveToRegisteredProfiles,
+} from '../context/AuthContext';
 import type {
   AdminUserRecord,
   DirectusAssetRecord,
@@ -242,6 +247,20 @@ export const AdminDashboardPage: React.FC = () => {
     try {
       const usersMap = new Map<string, AdminUserRecord>();
 
+      let tombList: string[] = [];
+      try {
+        const tombRaw = localStorage.getItem(TOMBSTONE_KEY);
+        if (tombRaw) tombList = JSON.parse(tombRaw);
+      } catch {}
+
+      const isPurged = (id?: string, email?: string, uname?: string) => {
+        if (!id && !email && !uname) return false;
+        if (id && tombList.includes(id)) return true;
+        if (email && tombList.includes(email.toLowerCase())) return true;
+        if (uname && tombList.includes(uname.toLowerCase())) return true;
+        return false;
+      };
+
       const toAdminRecord = (p: Profile, _source = 'live'): AdminUserRecord => ({
         id: p.id,
         display_name: p.display_name || 'User',
@@ -261,14 +280,35 @@ export const AdminDashboardPage: React.FC = () => {
         created_at: p.created_at || new Date().toISOString(),
       });
 
+      // 0. Load CMS Users Cache (Admin-created users and edits)
+      try {
+        const cmsCacheRaw = localStorage.getItem(CMS_USERS_CACHE_KEY);
+        if (cmsCacheRaw) {
+          const parsed = JSON.parse(cmsCacheRaw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((u: AdminUserRecord) => {
+              if (u && u.id && !isPurged(u.id, u.email, u.username)) {
+                usersMap.set(u.id, u);
+              }
+            });
+          }
+        }
+      } catch {}
+
       // A. Load registered profiles registry (Synced from all web/mobile signins)
       try {
-        const regRaw = localStorage.getItem('4ever_registered_profiles_v1');
+        const regRaw = localStorage.getItem(REGISTERED_PROFILES_KEY);
         if (regRaw) {
           const parsed = JSON.parse(regRaw);
           if (Array.isArray(parsed)) {
             parsed.forEach((p: Profile) => {
-              if (p && p.id) usersMap.set(p.id, toAdminRecord(p, 'registry'));
+              if (p && p.id && !isPurged(p.id, p.email, p.username)) {
+                const existing = usersMap.get(p.id);
+                usersMap.set(p.id, {
+                  ...toAdminRecord(p, 'registry'),
+                  ...(existing || {}),
+                });
+              }
             });
           }
         }
@@ -281,7 +321,9 @@ export const AdminDashboardPage: React.FC = () => {
           const parsed = JSON.parse(socRaw);
           if (Array.isArray(parsed)) {
             parsed.forEach((p: Profile) => {
-              if (p && p.id && !usersMap.has(p.id)) usersMap.set(p.id, toAdminRecord(p, 'social'));
+              if (p && p.id && !isPurged(p.id, p.email, p.username) && !usersMap.has(p.id)) {
+                usersMap.set(p.id, toAdminRecord(p, 'social'));
+              }
             });
           }
         }
@@ -292,7 +334,9 @@ export const AdminDashboardPage: React.FC = () => {
         const currRaw = localStorage.getItem('4ever_current_profile');
         if (currRaw) {
           const p = JSON.parse(currRaw);
-          if (p && p.id) usersMap.set(p.id, toAdminRecord(p, 'current'));
+          if (p && p.id && !isPurged(p.id, p.email, p.username)) {
+            usersMap.set(p.id, toAdminRecord(p, 'current'));
+          }
         }
       } catch {}
 
@@ -300,7 +344,7 @@ export const AdminDashboardPage: React.FC = () => {
       try {
         const { data: sessionRes } = await supabase.auth.getSession();
         const authUser = sessionRes?.session?.user;
-        if (authUser) {
+        if (authUser && !isPurged(authUser.id, authUser.email, authUser.user_metadata?.username)) {
           const existing = usersMap.get(authUser.id);
           const metaName = authUser.user_metadata?.full_name || authUser.user_metadata?.display_name || authUser.user_metadata?.name;
           const liveRecord: AdminUserRecord = {
@@ -333,6 +377,7 @@ export const AdminDashboardPage: React.FC = () => {
 
       if (!profilesError && profilesData && profilesData.length > 0) {
         profilesData.forEach((p: Profile) => {
+          if (isPurged(p.id, p.email, p.username)) return;
           const existing = usersMap.get(p.id);
           usersMap.set(p.id, {
             ...toAdminRecord(p, 'supabase'),
@@ -347,10 +392,11 @@ export const AdminDashboardPage: React.FC = () => {
         connected = false;
       }
 
-      const mergedUsers = Array.from(usersMap.values());
-      if (mergedUsers.length > 0) {
-        setUsers(mergedUsers);
-      }
+      const mergedUsers = Array.from(usersMap.values()).filter(
+        (u) => !isPurged(u.id, u.email, u.username)
+      );
+      setUsers(mergedUsers);
+      localStorage.setItem(CMS_USERS_CACHE_KEY, JSON.stringify(mergedUsers));
 
       // 2. Fetch live Relationships
       const { data: relsData, error: relsError } = await supabase
@@ -523,12 +569,25 @@ export const AdminDashboardPage: React.FC = () => {
 
     const newUserId = 'usr_' + Date.now();
     const uname = newUserUsername.trim() || newUserName.trim().toLowerCase().replace(/\s+/g, '_');
+    const email = newUserEmail.trim().toLowerCase();
+
+    // 1. Remove from tombstone blacklist if previously purged
+    try {
+      const tombRaw = localStorage.getItem(TOMBSTONE_KEY);
+      if (tombRaw) {
+        let tombList: string[] = JSON.parse(tombRaw);
+        tombList = tombList.filter(
+          (item) => item !== newUserId && item !== email && item !== uname.toLowerCase()
+        );
+        localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(tombList));
+      }
+    } catch {}
 
     const createdRecord: AdminUserRecord = {
       id: newUserId,
       display_name: newUserName.trim(),
       username: uname,
-      email: newUserEmail.trim(),
+      email: email,
       role: 'user',
       storage_used_mb: 0,
       storage_limit_mb: newUserQuota,
@@ -538,12 +597,39 @@ export const AdminDashboardPage: React.FC = () => {
       created_at: new Date().toISOString(),
     };
 
-    // Optimistic local add
-    setUsers((prev) => [createdRecord, ...prev]);
+    const newProfile: Profile = {
+      id: newUserId,
+      display_name: createdRecord.display_name,
+      username: uname,
+      email: email,
+      bio: '',
+      is_online: true,
+      last_seen: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
 
-    // Live Supabase insert
+    // 2. Add to React state and CMS cache
+    setUsers((prev) => {
+      const updated = [createdRecord, ...prev.filter((u) => u.id !== newUserId)];
+      localStorage.setItem(CMS_USERS_CACHE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+
+    // 3. Persist to registered profiles registry
+    saveToRegisteredProfiles(newProfile);
+
+    // 4. Persist to real users context cache
     try {
-      await supabase.from('profiles').insert([
+      const socRaw = localStorage.getItem('4ever_real_users_v4');
+      const socList: Profile[] = socRaw ? JSON.parse(socRaw) : [];
+      socList.unshift(newProfile);
+      localStorage.setItem('4ever_real_users_v4', JSON.stringify(socList));
+      localStorage.setItem(`4ever_profile_${newUserId}`, JSON.stringify(newProfile));
+    } catch {}
+
+    // 5. Live Supabase upsert
+    try {
+      await supabase.from('profiles').upsert([
         {
           id: newUserId,
           display_name: createdRecord.display_name,
@@ -552,7 +638,7 @@ export const AdminDashboardPage: React.FC = () => {
           is_online: true,
           last_seen: new Date().toISOString(),
         },
-      ]);
+      ], { onConflict: 'id' });
     } catch (err) {
       console.error('Failed to insert user to Supabase:', err);
     }
@@ -569,18 +655,37 @@ export const AdminDashboardPage: React.FC = () => {
     if (!editUserModal.user) return;
 
     const updated = editUserModal.user;
-    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+    setUsers((prev) => {
+      const next = prev.map((u) => (u.id === updated.id ? updated : u));
+      localStorage.setItem(CMS_USERS_CACHE_KEY, JSON.stringify(next));
+      return next;
+    });
 
     // Sync to local registered profiles registry
     try {
-      const regRaw = localStorage.getItem('4ever_registered_profiles_v1');
+      const regRaw = localStorage.getItem(REGISTERED_PROFILES_KEY);
       if (regRaw) {
         const list = JSON.parse(regRaw);
         const idx = list.findIndex((item: { id: string }) => item.id === updated.id);
         if (idx >= 0) {
-          list[idx] = { ...list[idx], display_name: updated.display_name, username: updated.username, bio: updated.bio };
-          localStorage.setItem('4ever_registered_profiles_v1', JSON.stringify(list));
+          list[idx] = {
+            ...list[idx],
+            display_name: updated.display_name,
+            username: updated.username,
+            bio: updated.bio,
+            storage_limit_mb: updated.storage_limit_mb,
+          };
+          localStorage.setItem(REGISTERED_PROFILES_KEY, JSON.stringify(list));
         }
+      }
+    } catch {}
+
+    // Update individual profile cache
+    try {
+      const cached = localStorage.getItem(`4ever_profile_${updated.id}`);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        localStorage.setItem(`4ever_profile_${updated.id}`, JSON.stringify({ ...parsed, ...updated }));
       }
     } catch {}
 
@@ -613,9 +718,11 @@ export const AdminDashboardPage: React.FC = () => {
     if (!target) return;
 
     const newStatus = !target.is_banned;
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, is_banned: newStatus } : u))
-    );
+    setUsers((prev) => {
+      const updated = prev.map((u) => (u.id === userId ? { ...u, is_banned: newStatus } : u));
+      localStorage.setItem(CMS_USERS_CACHE_KEY, JSON.stringify(updated));
+      return updated;
+    });
 
     try {
       await supabase.from('profiles').update({ is_banned: newStatus }).eq('id', userId);
@@ -625,8 +732,61 @@ export const AdminDashboardPage: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (confirm('Permanently purge this user account and their data from the platform?')) {
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
+    const target = users.find((u) => u.id === userId);
+    const targetName = target?.display_name || 'this user';
+    const targetUname = target?.username ? ` (@${target.username})` : '';
+
+    if (confirm(`Permanently purge user account "${targetName}"${targetUname} and all their data from the platform?`)) {
+      // 1. Add to tombstone blacklist
+      try {
+        const tombRaw = localStorage.getItem(TOMBSTONE_KEY);
+        const tombList: string[] = tombRaw ? JSON.parse(tombRaw) : [];
+        if (!tombList.includes(userId)) tombList.push(userId);
+        if (target?.email && !tombList.includes(target.email.toLowerCase())) {
+          tombList.push(target.email.toLowerCase());
+        }
+        if (target?.username && !tombList.includes(target.username.toLowerCase())) {
+          tombList.push(target.username.toLowerCase());
+        }
+        localStorage.setItem(TOMBSTONE_KEY, JSON.stringify(tombList));
+      } catch {}
+
+      // 2. Update React state and CMS cache
+      setUsers((prev) => {
+        const updated = prev.filter((u) => u.id !== userId);
+        localStorage.setItem(CMS_USERS_CACHE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+
+      // 3. Remove from registered profiles registry
+      try {
+        const regRaw = localStorage.getItem(REGISTERED_PROFILES_KEY);
+        if (regRaw) {
+          const list: Profile[] = JSON.parse(regRaw);
+          const filtered = list.filter((p) => p.id !== userId && p.email?.toLowerCase() !== target?.email?.toLowerCase());
+          localStorage.setItem(REGISTERED_PROFILES_KEY, JSON.stringify(filtered));
+        }
+      } catch {}
+
+      // 4. Remove from real users cache
+      try {
+        const socRaw = localStorage.getItem('4ever_real_users_v4');
+        if (socRaw) {
+          const list: Profile[] = JSON.parse(socRaw);
+          const filtered = list.filter((p) => p.id !== userId && p.email?.toLowerCase() !== target?.email?.toLowerCase());
+          localStorage.setItem('4ever_real_users_v4', JSON.stringify(filtered));
+        }
+        localStorage.removeItem(`4ever_profile_${userId}`);
+      } catch {}
+
+      // 5. Remove from relationships
+      setRelationships((prev) => {
+        const updated = prev.filter((r) => r.user_1 !== userId && r.user_2 !== userId);
+        localStorage.setItem(CMS_RELS_CACHE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+
+      // 6. Delete from Supabase
       try {
         await supabase.from('profiles').delete().eq('id', userId);
       } catch (err) {

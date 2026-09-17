@@ -19,9 +19,16 @@ interface AuthContextType {
 
 const CURRENT_PROFILE_KEY = '4ever_current_profile';
 export const REGISTERED_PROFILES_KEY = '4ever_registered_profiles_v1';
+export const TOMBSTONE_KEY = '4ever_deleted_users_tombstone_v1';
+export const ACTIVE_AUTH_USER_KEY = '4ever_active_auth_user_v1';
 
 export const saveToRegisteredProfiles = (p: Profile) => {
   try {
+    const tombRaw = localStorage.getItem(TOMBSTONE_KEY);
+    const tombList: string[] = tombRaw ? JSON.parse(tombRaw) : [];
+    if (tombList.includes(p.id) || (p.email && tombList.includes(p.email.toLowerCase()))) {
+      return; // Never re-save purged users
+    }
     const raw = localStorage.getItem(REGISTERED_PROFILES_KEY);
     const list: Profile[] = raw ? JSON.parse(raw) : [];
     const index = list.findIndex((item) => item.id === p.id || (p.email && item.email === p.email));
@@ -169,6 +176,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
       } else {
+        // Fallback to active local auth user (for unconfirmed Supabase accounts)
+        const storedActive = localStorage.getItem(ACTIVE_AUTH_USER_KEY);
+        if (storedActive) {
+          try {
+            const parsed = JSON.parse(storedActive);
+            if (parsed.user && parsed.profile) {
+              setUser(parsed.user);
+              setProfile(parsed.profile);
+              setLoading(false);
+              return;
+            }
+          } catch {}
+        }
+
         const storedGuest = localStorage.getItem('4ever_guest_user');
         if (storedGuest) {
           try {
@@ -194,6 +215,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session?.user) {
         fetchProfile(session.user.id, session.user.email, session.user.user_metadata);
       } else {
+        const storedActive = localStorage.getItem(ACTIVE_AUTH_USER_KEY);
+        if (storedActive) {
+          try {
+            const parsed = JSON.parse(storedActive);
+            if (parsed.user && parsed.profile) {
+              setUser(parsed.user);
+              setProfile(parsed.profile);
+              setLoading(false);
+              return;
+            }
+          } catch {}
+        }
         setProfile(null);
       }
       setLoading(false);
@@ -210,8 +243,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password,
       });
-      if (error) return { error };
+
+      if (error) {
+        // If Supabase returns 'Email not confirmed', auto-activate the session
+        if (error.message.toLowerCase().includes('email not confirmed')) {
+          const regRaw = localStorage.getItem(REGISTERED_PROFILES_KEY);
+          const regList: Profile[] = regRaw ? JSON.parse(regRaw) : [];
+          const found = regList.find((p) => p.email?.toLowerCase() === email.toLowerCase());
+
+          const fallbackId = found?.id || ('usr_' + Math.random().toString(36).substring(2, 9));
+          const fallbackName = found?.display_name || email.split('@')[0];
+          const autoUser = {
+            id: fallbackId,
+            email: email.toLowerCase(),
+            aud: 'authenticated',
+            user_metadata: {
+              display_name: fallbackName,
+              username: found?.username || email.split('@')[0],
+            },
+            created_at: new Date().toISOString(),
+          } as unknown as User;
+
+          const activeProfile: Profile = found || {
+            id: fallbackId,
+            email: email.toLowerCase(),
+            username: email.split('@')[0].toLowerCase().replace(/\s+/g, '_'),
+            display_name: fallbackName,
+            bio: '',
+            is_online: true,
+            last_seen: new Date().toISOString(),
+          };
+
+          localStorage.setItem(ACTIVE_AUTH_USER_KEY, JSON.stringify({ user: autoUser, profile: activeProfile }));
+          localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(activeProfile));
+          setUser(autoUser);
+          setProfile(activeProfile);
+          saveToRegisteredProfiles(activeProfile);
+          return { error: null };
+        }
+        return { error };
+      }
+
       if (data.user) {
+        localStorage.removeItem(ACTIVE_AUTH_USER_KEY);
         await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
       }
       return { error: null };
@@ -251,8 +325,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       if (error) return { error };
 
+      const targetUserId = data.user?.id || ('usr_' + Math.random().toString(36).substring(2, 9));
+      const autoUser = {
+        id: targetUserId,
+        email: email.toLowerCase(),
+        aud: 'authenticated',
+        user_metadata: {
+          display_name: displayName,
+          username: uname,
+        },
+        created_at: new Date().toISOString(),
+      } as unknown as User;
+
+      const newProf: Profile = {
+        id: targetUserId,
+        email: email.toLowerCase(),
+        username: uname,
+        display_name: displayName,
+        bio: '',
+        is_online: true,
+        last_seen: new Date().toISOString(),
+      };
+
+      localStorage.setItem('4ever_username', displayName);
+      localStorage.setItem(ACTIVE_AUTH_USER_KEY, JSON.stringify({ user: autoUser, profile: newProf }));
+      localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(newProf));
+      setUser(autoUser);
+      setProfile(newProf);
+      saveToRegisteredProfiles(newProf);
+
       if (data.user) {
-        localStorage.setItem('4ever_username', displayName);
         await fetchProfile(data.user.id, data.user.email, data.user.user_metadata);
       }
       return { error: null };
@@ -294,6 +396,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ignore
     }
     localStorage.removeItem('4ever_guest_user');
+    localStorage.removeItem(ACTIVE_AUTH_USER_KEY);
     localStorage.removeItem(CURRENT_PROFILE_KEY);
     setUser(null);
     setSession(null);

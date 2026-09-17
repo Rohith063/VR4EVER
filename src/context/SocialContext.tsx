@@ -10,7 +10,7 @@ import type {
   DirectChatThread,
   AppNotification,
 } from '../types';
-import { useAuth } from './AuthContext';
+import { useAuth, TOMBSTONE_KEY } from './AuthContext';
 import { useRelationship } from './RelationshipContext';
 
 interface SocialContextType {
@@ -122,8 +122,17 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Real users directory
   const [allUsers, setAllUsers] = useState<Profile[]>(() => {
     try {
+      const tombRaw = localStorage.getItem(TOMBSTONE_KEY);
+      const tombList: string[] = tombRaw ? JSON.parse(tombRaw) : [];
       const stored = localStorage.getItem(LOCAL_STORAGE_USERS);
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const parsed: Profile[] = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (u) => !tombList.includes(u.id) && (!u.email || !tombList.includes(u.email.toLowerCase()))
+          );
+        }
+      }
     } catch {
       // ignore
     }
@@ -258,6 +267,11 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         // 1. Another real user announced presence
         if (payload.type === 'user_presence' && payload.profile) {
           const incoming: Profile = payload.profile;
+          const tombRaw = localStorage.getItem(TOMBSTONE_KEY);
+          const tombList: string[] = tombRaw ? JSON.parse(tombRaw) : [];
+          if (tombList.includes(incoming.id) || (incoming.email && tombList.includes(incoming.email.toLowerCase()))) {
+            return;
+          }
           if (incoming.id !== user?.id) {
             setAllUsers((prev) => {
               if (prev.some((u) => u.id === incoming.id)) {
