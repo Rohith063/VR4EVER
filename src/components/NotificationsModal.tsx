@@ -183,7 +183,8 @@ export const NotificationsModal: React.FC = () => {
             ) : (
               <div className="text-center py-12 text-white/40">
                 <Bell className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                <p className="text-xs">No notifications right now</p>
+                <p className="text-sm font-semibold text-white/70">None</p>
+                <p className="text-xs text-white/40 mt-1">No notifications right now</p>
               </div>
             )}
           </div>

@@ -421,6 +421,21 @@ export const SettingsPage: React.FC = () => {
               className="rounded bg-white/10 border-white/20 text-amber-500 w-4 h-4 focus:ring-0"
             />
           </div>
+
+          <div className="flex items-center justify-between border-t border-white/5 pt-3">
+            <div>
+              <h4 className="text-sm font-semibold text-white">Private Account</h4>
+              <p className="text-xs text-white/50">
+                Only approved friends and your partner can see your photos, posts, and real-time updates.
+              </p>
+            </div>
+            <input
+              type="checkbox"
+              checked={Boolean(profile?.is_private_account)}
+              onChange={(e) => updateProfile({ is_private_account: e.target.checked })}
+              className="rounded bg-white/10 border-white/20 text-amber-500 w-4 h-4 focus:ring-0 cursor-pointer"
+            />
+          </div>
         </div>
       </div>
 
@@ -521,38 +536,19 @@ export const SettingsPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Quick Switch Profiles */}
-        <div className="pt-2 border-t border-white/5 space-y-2">
-          <p className="text-[11px] text-white/40 font-medium">Quick Switch to Another Account:</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {[
-              { name: 'Ananya Verma', username: 'ananya_v', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
-              { name: 'Rahul Sharma', username: 'rahul_s', avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80' },
-            ].map((acc) => (
-              <button
-                key={acc.username}
-                type="button"
-                onClick={async () => {
-                  await updateProfile({
-                    display_name: acc.name,
-                    username: acc.username,
-                    avatar_url: acc.avatar,
-                  });
-                  window.location.reload();
-                }}
-                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-between text-left transition-all cursor-pointer group"
-              >
-                <div className="flex items-center space-x-2">
-                  <img src={acc.avatar} alt={acc.name} className="w-7 h-7 rounded-full object-cover" />
-                  <div className="text-xs">
-                    <p className="font-semibold text-white group-hover:text-amber-300 transition-colors">{acc.name}</p>
-                    <p className="text-[10px] text-white/40">@{acc.username}</p>
-                  </div>
-                </div>
-                <span className="text-[11px] text-amber-300 group-hover:underline">Switch</span>
-              </button>
-            ))}
-          </div>
+        {/* Account Actions */}
+        <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+          <p className="text-xs text-white/50">Need to switch or log into another profile?</p>
+          <button
+            type="button"
+            onClick={async () => {
+              await signOut();
+              navigate('/auth');
+            }}
+            className="px-3.5 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 border border-amber-500/30 text-xs font-semibold transition-colors cursor-pointer"
+          >
+            Add or Switch Account
+          </button>
         </div>
       </div>
 

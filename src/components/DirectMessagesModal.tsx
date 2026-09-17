@@ -199,9 +199,15 @@ export const DirectMessagesModal: React.FC = () => {
 
             {/* Threads List Items */}
             <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/5">
-              {filteredThreads.map((thread) => {
-                const isSelected = currentThread?.id === thread.id;
-                const isCouple = thread.is_couple;
+              {filteredThreads.length === 0 ? (
+                <div className="text-center py-16 px-4 text-white/40">
+                  <p className="text-sm font-semibold text-white/70">None</p>
+                  <p className="text-xs text-white/40 mt-1">No chats yet. Add friends or connect your partner to start messaging.</p>
+                </div>
+              ) : (
+                filteredThreads.map((thread) => {
+                  const isSelected = currentThread?.id === thread.id;
+                  const isCouple = thread.is_couple;
 
                 return (
                   <button
@@ -285,7 +291,7 @@ export const DirectMessagesModal: React.FC = () => {
                     )}
                   </button>
                 );
-              })}
+              }))}
             </div>
           </div>
 
@@ -392,6 +398,15 @@ export const DirectMessagesModal: React.FC = () => {
                       🔒 End-to-End Encrypted 4EVER Chat
                     </span>
                   </div>
+
+                  {activeMessages.length === 0 && (
+                    <div className="text-center py-16 text-white/40">
+                      <p className="text-sm font-semibold text-white/60">None</p>
+                      <p className="text-xs text-white/40 mt-1">
+                        No messages in this conversation yet. Send a message to start chatting!
+                      </p>
+                    </div>
+                  )}
 
                   {activeMessages.map((msg) => {
                     const isMe = msg.sender_id === (user?.id || 'me');
@@ -602,9 +617,9 @@ export const DirectMessagesModal: React.FC = () => {
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-white/40 p-6 text-center">
                 <Heart className="w-12 h-12 mb-3 opacity-30 text-rose-400" />
-                <p className="text-sm font-semibold text-white">Your Messages</p>
+                <p className="text-sm font-semibold text-white">None</p>
                 <p className="text-xs text-white/50 max-w-xs mt-1">
-                  Send private messages, photos, voice notes, and live locations to your friends and loved one.
+                  No active conversation. Search users to connect and start a chat.
                 </p>
               </div>
             )}

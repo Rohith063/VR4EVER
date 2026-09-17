@@ -142,8 +142,14 @@ export const SearchPage: React.FC = () => {
         {(activeTab === 'all' ? searchResults : friendsList).length === 0 ? (
           <div className="text-center py-16 glass-card rounded-3xl border border-white/10 space-y-2">
             <Users className="w-10 h-10 text-white/30 mx-auto" />
-            <p className="text-sm text-white/70 font-medium">No users found matching &ldquo;{query}&rdquo;</p>
-            <p className="text-xs text-white/40">Try searching for &ldquo;ananya&rdquo;, &ldquo;rahul&rdquo;, or &ldquo;priya&rdquo;</p>
+            <p className="text-sm text-white/70 font-medium">None</p>
+            <p className="text-xs text-white/40">
+              {query
+                ? `No users found matching "${query}"`
+                : activeTab === 'friends'
+                ? 'No friends added yet.'
+                : 'No other users registered yet. As real people sign up, they will appear here in real time!'}
+            </p>
           </div>
         ) : (
           (activeTab === 'all' ? searchResults : friendsList).map((targetUser) => {

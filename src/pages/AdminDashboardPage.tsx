@@ -46,48 +46,6 @@ export const AdminDashboardPage: React.FC = () => {
     }
     return [
       {
-        id: 'usr_ananya',
-        display_name: 'Ananya Verma',
-        username: 'ananya_v',
-        email: 'ananya@example.com',
-        role: 'user',
-        relationship_id: 'space_01',
-        partner_name: 'Rahul Sharma',
-        storage_used_mb: 48.2,
-        storage_limit_mb: 100,
-        is_online: true,
-        last_seen: 'Active now',
-        created_at: new Date(Date.now() - 86400000 * 35).toISOString(),
-      },
-      {
-        id: 'usr_rahul',
-        display_name: 'Rahul Sharma',
-        username: 'rahul_s',
-        email: 'rahul@example.com',
-        role: 'user',
-        relationship_id: 'space_01',
-        partner_name: 'Ananya Verma',
-        storage_used_mb: 37.6,
-        storage_limit_mb: 100,
-        is_online: true,
-        last_seen: '5 mins ago',
-        created_at: new Date(Date.now() - 86400000 * 35).toISOString(),
-      },
-      {
-        id: 'usr_priya',
-        display_name: 'Priya Kapoor',
-        username: 'priya_k',
-        email: 'priya@example.com',
-        role: 'user',
-        relationship_id: null,
-        partner_name: null,
-        storage_used_mb: 12.1,
-        storage_limit_mb: 100,
-        is_online: false,
-        last_seen: '2 hours ago',
-        created_at: new Date(Date.now() - 86400000 * 12).toISOString(),
-      },
-      {
         id: 'usr_admin',
         display_name: 'Platform Root Admin',
         username: 'admin',
@@ -95,11 +53,11 @@ export const AdminDashboardPage: React.FC = () => {
         role: 'admin',
         relationship_id: null,
         partner_name: null,
-        storage_used_mb: 5.4,
+        storage_used_mb: 0,
         storage_limit_mb: 500,
         is_online: true,
         last_seen: 'Managing Admin CMS',
-        created_at: new Date(Date.now() - 86400000 * 90).toISOString(),
+        created_at: new Date().toISOString(),
       },
     ];
   });
@@ -112,48 +70,7 @@ export const AdminDashboardPage: React.FC = () => {
     } catch {
       // ignore
     }
-    return [
-      {
-        id: 'file_01',
-        title: 'Sunset at Lake Anniversary',
-        filename: 'lake_date_sunset.jpg',
-        filesize_kb: 2450,
-        mime_type: 'image/jpeg',
-        uploaded_by: 'ananya_v',
-        uploaded_at: '2026-09-15',
-        url: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=800&auto=format&fit=crop&q=80',
-      },
-      {
-        id: 'file_02',
-        title: 'Coffee Morning Walk',
-        filename: 'sunday_coffee.jpg',
-        filesize_kb: 1890,
-        mime_type: 'image/jpeg',
-        uploaded_by: 'rahul_s',
-        uploaded_at: '2026-09-16',
-        url: 'https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=800&auto=format&fit=crop&q=80',
-      },
-      {
-        id: 'file_03',
-        title: 'Couple Budget September Sheet',
-        filename: 'september_expenses.pdf',
-        filesize_kb: 420,
-        mime_type: 'application/pdf',
-        uploaded_by: 'ananya_v',
-        uploaded_at: '2026-09-14',
-        url: '#',
-      },
-      {
-        id: 'file_04',
-        title: 'Road Trip Clip Moments',
-        filename: 'hills_trip.mp4',
-        filesize_kb: 14200,
-        mime_type: 'video/mp4',
-        uploaded_by: 'rahul_s',
-        uploaded_at: '2026-09-12',
-        url: '#',
-      },
-    ];
+    return [];
   });
 
   // Modals state

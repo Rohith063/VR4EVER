@@ -19,6 +19,7 @@ export interface Profile {
   relationship_partner_username?: string | null;
   relationship_partner_name?: string | null;
   relationship_role?: 'girlfriend' | 'boyfriend' | 'partner' | null;
+  is_private_account?: boolean;
 }
 
 export interface Relationship {
@@ -199,6 +200,7 @@ export interface FeedPost {
   is_liked_by_me: boolean;
   comments_count: number;
   tag?: string | null;
+  visibility?: 'public' | 'private' | 'friends';
   created_at: string;
 }
 

@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import { supabase } from '../lib/supabase';
 import type {
   FeedPost,
   PostComment,
@@ -19,7 +20,8 @@ interface SocialContextType {
     content: string,
     mediaUrl?: string | null,
     mediaType?: 'image' | 'video' | null,
-    tag?: string | null
+    tag?: string | null,
+    visibility?: 'public' | 'private' | 'friends'
   ) => void;
   deletePost: (postId: string) => void;
   toggleLike: (postId: string) => void;
@@ -83,191 +85,19 @@ interface SocialContextType {
 
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_POSTS = '4ever_social_posts_v3';
-const LOCAL_STORAGE_COMMENTS = '4ever_social_comments_v3';
-const LOCAL_STORAGE_FRIENDS = '4ever_social_friends_v3';
-const LOCAL_STORAGE_USERS = '4ever_social_directory_v3';
-const LOCAL_STORAGE_DM_MESSAGES = '4ever_social_dm_msgs_v3';
-const LOCAL_STORAGE_NOTIFS = '4ever_social_notifs_v3';
-
-const INITIAL_DIRECTORY_USERS: Profile[] = [
-  {
-    id: 'usr_ananya',
-    email: 'ananya@example.com',
-    username: 'ananya_v',
-    display_name: 'Ananya Verma',
-    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=800&auto=format&fit=crop&q=80',
-    bio: 'Finding art in every sunset & tea in every rainy afternoon ☕✨',
-    posts_count: 14,
-    friends_count: 28,
-    is_online: true,
-    relationship_partner_username: 'arjun_m',
-    relationship_partner_name: 'Arjun Mehta',
-    relationship_role: 'girlfriend',
-  },
-  {
-    id: 'usr_rahul',
-    email: 'rahul@example.com',
-    username: 'rahul_s',
-    display_name: 'Rahul Sharma',
-    avatar_url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-    bio: 'Architecture student | Coffee addict | Capturing little moments 📷',
-    posts_count: 8,
-    friends_count: 19,
-    is_online: true,
-    relationship_role: null,
-  },
-  {
-    id: 'usr_priya',
-    email: 'priya@example.com',
-    username: 'priya_k',
-    display_name: 'Priya Kapoor',
-    avatar_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1470240731273-7821a6eeb6bd?w=800&auto=format&fit=crop&q=80',
-    bio: 'Music enthusiast & mountain lover 🏔️ Always humming a melody.',
-    posts_count: 22,
-    friends_count: 45,
-    is_online: false,
-    relationship_role: null,
-  },
-  {
-    id: 'usr_arjun',
-    email: 'arjun@example.com',
-    username: 'arjun_m',
-    display_name: 'Arjun Mehta',
-    avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80',
-    bio: 'Coder by day, street photographer by night 🌃 Let’s connect!',
-    posts_count: 11,
-    friends_count: 34,
-    is_online: true,
-    relationship_partner_username: 'ananya_v',
-    relationship_partner_name: 'Ananya Verma',
-    relationship_role: 'boyfriend',
-  },
-  {
-    id: 'usr_sneha',
-    email: 'sneha@example.com',
-    username: 'sneha_d',
-    display_name: 'Sneha Das',
-    avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
-    cover_url: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=800&auto=format&fit=crop&q=80',
-    bio: 'Books, poetry & spontaneous road trips 📖✨',
-    posts_count: 19,
-    friends_count: 52,
-    is_online: false,
-    relationship_role: null,
-  },
-];
-
-const INITIAL_FEED_POSTS: FeedPost[] = [
-  {
-    id: 'post_1',
-    author_id: 'usr_ananya',
-    author_name: 'Ananya Verma',
-    author_username: 'ananya_v',
-    author_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    content: 'Weekend getaway by the lake with the one who makes everyday feel golden 🌅💛 Grateful for these calm moments.',
-    media_url: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=800&auto=format&fit=crop&q=80',
-    media_type: 'image',
-    likes_count: 34,
-    is_liked_by_me: false,
-    comments_count: 5,
-    tag: '#love',
-    created_at: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
-  },
-  {
-    id: 'post_2',
-    author_id: 'usr_rahul',
-    author_name: 'Rahul Sharma',
-    author_username: 'rahul_s',
-    author_avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-    content: 'Just finished our couple study goal for the week! 📚 12 hours clocked together on 4EVER notes. Hard work always pays off.',
-    media_url: null,
-    media_type: null,
-    likes_count: 19,
-    is_liked_by_me: true,
-    comments_count: 2,
-    tag: '#milestone',
-    created_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-  },
-  {
-    id: 'post_3',
-    author_id: 'usr_priya',
-    author_name: 'Priya Kapoor',
-    author_username: 'priya_k',
-    author_avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    content: 'Made our favorite chocolate pancake breakfast this morning! Nothing beats cozy Sunday mornings 🥞☕',
-    media_url: 'https://images.unsplash.com/photo-1506084868230-bb9d95c24759?w=800&auto=format&fit=crop&q=80',
-    media_type: 'image',
-    likes_count: 48,
-    is_liked_by_me: false,
-    comments_count: 8,
-    tag: '#date',
-    created_at: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
-  },
-  {
-    id: 'post_4',
-    author_id: 'usr_arjun',
-    author_name: 'Arjun Mehta',
-    author_username: 'arjun_m',
-    author_avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    content: 'Night strolls in old town. The ambient city lights make everything feel cinematic ✨',
-    media_url: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=800&auto=format&fit=crop&q=80',
-    media_type: 'image',
-    likes_count: 27,
-    is_liked_by_me: false,
-    comments_count: 3,
-    tag: '#thoughts',
-    created_at: new Date(Date.now() - 1000 * 60 * 720).toISOString(),
-  },
-];
-
-const INITIAL_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'notif_1',
-    type: 'couple_request',
-    from_user_id: 'usr_priya',
-    from_user_name: 'Priya Kapoor',
-    from_user_username: 'priya_k',
-    from_user_avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
-    content: 'wants to connect with you in a dedicated Couple Space ❤️',
-    created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-    is_read: false,
-    request_status: 'pending',
-  },
-  {
-    id: 'notif_2',
-    type: 'friend_request',
-    from_user_id: 'usr_arjun',
-    from_user_name: 'Arjun Mehta',
-    from_user_username: 'arjun_m',
-    from_user_avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-    content: 'sent you a friend request 👋',
-    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-    is_read: false,
-    request_status: 'pending',
-  },
-  {
-    id: 'notif_3',
-    type: 'like',
-    from_user_id: 'usr_ananya',
-    from_user_name: 'Ananya Verma',
-    from_user_username: 'ananya_v',
-    from_user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-    content: 'liked your recent feed post ✨',
-    created_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-    is_read: true,
-  },
-];
+// Local Storage Keys (v4 clean slate: NO BOTS, REAL USERS ONLY)
+const LOCAL_STORAGE_POSTS = '4ever_real_posts_v4';
+const LOCAL_STORAGE_COMMENTS = '4ever_real_comments_v4';
+const LOCAL_STORAGE_FRIENDS = '4ever_real_friends_v4';
+const LOCAL_STORAGE_USERS = '4ever_real_users_v4';
+const LOCAL_STORAGE_DM_MESSAGES = '4ever_real_dm_msgs_v4';
+const LOCAL_STORAGE_NOTIFS = '4ever_real_notifs_v4';
 
 export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile, updateProfile } = useAuth();
   const { relationship, partnerProfile, createSpace } = useRelationship();
 
-  // Posts state
+  // Posts state (Start with clean empty array)
   const [posts, setPosts] = useState<FeedPost[]>(() => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_POSTS);
@@ -275,7 +105,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch {
       // ignore
     }
-    return INITIAL_FEED_POSTS;
+    return [];
   });
 
   // Comments state
@@ -286,31 +116,18 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch {
       // ignore
     }
-    return {
-      post_1: [
-        {
-          id: 'c_1',
-          post_id: 'post_1',
-          author_id: 'usr_rahul',
-          author_name: 'Rahul Sharma',
-          author_username: 'rahul_s',
-          author_avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-          content: 'Such a peaceful view! Have a wonderful weekend 🙌',
-          created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        },
-      ],
-    };
+    return {};
   });
 
-  // User Directory state
-  const [allUsers] = useState<Profile[]>(() => {
+  // Real users directory
+  const [allUsers, setAllUsers] = useState<Profile[]>(() => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_USERS);
       if (stored) return JSON.parse(stored);
     } catch {
       // ignore
     }
-    return INITIAL_DIRECTORY_USERS;
+    return [];
   });
 
   // Friends state
@@ -324,11 +141,11 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch {
       // ignore
     }
-    return ['usr_ananya', 'usr_rahul'];
+    return [];
   });
 
   const [pendingSentFriendIds, setPendingSentFriendIds] = useState<string[]>([]);
-  const [pendingReceivedFriendIds, setPendingReceivedFriendIds] = useState<string[]>(['usr_arjun']);
+  const [pendingReceivedFriendIds, setPendingReceivedFriendIds] = useState<string[]>([]);
 
   // Notifications state
   const [notifications, setNotifications] = useState<AppNotification[]>(() => {
@@ -338,7 +155,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch {
       // ignore
     }
-    return INITIAL_NOTIFICATIONS;
+    return [];
   });
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -351,54 +168,30 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch {
       // ignore
     }
-    return {
-      thread_couple: [
-        {
-          id: 'dm_init_1',
-          thread_id: 'thread_couple',
-          sender_id: 'partner',
-          sender_name: 'My Love',
-          sender_username: 'sweetheart',
-          content: 'Hey babe! Can’t wait for dinner later tonight ❤️',
-          type: 'text',
-          is_read: true,
-          created_at: new Date(Date.now() - 1000 * 60 * 40).toISOString(),
-        },
-      ],
-      thread_usr_ananya: [
-        {
-          id: 'dm_init_2',
-          thread_id: 'thread_usr_ananya',
-          sender_id: 'usr_ananya',
-          sender_name: 'Ananya Verma',
-          sender_username: 'ananya_v',
-          sender_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-          content: 'Hey! Loved the photos you posted earlier ✨',
-          type: 'text',
-          is_read: true,
-          created_at: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
-        },
-      ],
-      thread_usr_rahul: [
-        {
-          id: 'dm_init_3',
-          thread_id: 'thread_usr_rahul',
-          sender_id: 'usr_rahul',
-          sender_name: 'Rahul Sharma',
-          sender_username: 'rahul_s',
-          sender_avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-          content: 'Yo! Are we meeting for coffee this Sunday? ☕',
-          type: 'text',
-          is_read: false,
-          created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-        },
-      ],
-    };
+    return {};
   });
 
-  const [activeThreadId, setActiveThreadId] = useState<string | null>('thread_couple');
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isMessagesOpen, setIsMessagesOpen] = useState(false);
   const [selectedUserProfileId, setSelectedUserProfileId] = useState<string | null>(null);
+
+  // Realtime Supabase Broadcast Channel reference
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  // Keep allUsers updated with current user
+  useEffect(() => {
+    if (profile && profile.id) {
+      setAllUsers((prev) => {
+        const index = prev.findIndex((u) => u.id === profile.id);
+        if (index >= 0) {
+          const updated = [...prev];
+          updated[index] = { ...updated[index], ...profile };
+          return updated;
+        }
+        return [profile, ...prev];
+      });
+    }
+  }, [profile]);
 
   // Sync to local storage
   useEffect(() => {
@@ -416,6 +209,14 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // ignore
     }
   }, [comments]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_USERS, JSON.stringify(allUsers));
+    } catch {
+      // ignore
+    }
+  }, [allUsers]);
 
   useEffect(() => {
     try {
@@ -444,15 +245,138 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [notifications]);
 
+  // Connect to Supabase Realtime Broadcast network
+  useEffect(() => {
+    const channel = supabase.channel('4ever_realtime_network', {
+      config: { broadcast: { self: false } },
+    });
+
+    channel
+      .on('broadcast', { event: 'social_event' }, ({ payload }) => {
+        if (!payload) return;
+
+        // 1. Another real user announced presence
+        if (payload.type === 'user_presence' && payload.profile) {
+          const incoming: Profile = payload.profile;
+          if (incoming.id !== user?.id) {
+            setAllUsers((prev) => {
+              if (prev.some((u) => u.id === incoming.id)) {
+                return prev.map((u) => (u.id === incoming.id ? { ...u, ...incoming } : u));
+              }
+              return [...prev, incoming];
+            });
+          }
+        }
+
+        // 2. Someone requested presence announcements
+        if (payload.type === 'request_presence') {
+          if (profile && profile.id) {
+            channel.send({
+              type: 'broadcast',
+              event: 'social_event',
+              payload: { type: 'user_presence', profile },
+            });
+          }
+        }
+
+        // 3. New real feed post published
+        if (payload.type === 'new_post' && payload.post) {
+          const incomingPost: FeedPost = payload.post;
+          setPosts((prev) => {
+            if (prev.some((p) => p.id === incomingPost.id)) return prev;
+            return [incomingPost, ...prev];
+          });
+        }
+
+        // 4. Friend request received
+        if (payload.type === 'friend_request' && payload.targetUserId === (user?.id || profile?.id)) {
+          const sender: Profile = payload.sender;
+          setPendingReceivedFriendIds((prev) => (prev.includes(sender.id) ? prev : [...prev, sender.id]));
+          const newNotif: AppNotification = {
+            id: 'notif_fr_' + Date.now(),
+            type: 'friend_request',
+            from_user_id: sender.id,
+            from_user_name: sender.display_name,
+            from_user_username: sender.username,
+            from_user_avatar: sender.avatar_url,
+            content: 'sent you a friend request 👋',
+            created_at: new Date().toISOString(),
+            is_read: false,
+            request_status: 'pending',
+          };
+          setNotifications((prev) => [newNotif, ...prev]);
+        }
+
+        // 5. Friend request accepted by other person
+        if (payload.type === 'friend_accepted' && payload.targetUserId === (user?.id || profile?.id)) {
+          const sender: Profile = payload.sender;
+          setPendingSentFriendIds((prev) => prev.filter((id) => id !== sender.id));
+          setFriends((prev) => (prev.includes(sender.id) ? prev : [...prev, sender.id]));
+        }
+
+        // 6. Relationship proposal received
+        if (payload.type === 'couple_request' && payload.targetUserId === (user?.id || profile?.id)) {
+          const sender: Profile = payload.sender;
+          const newNotif: AppNotification = {
+            id: 'notif_cr_' + Date.now(),
+            type: 'couple_request',
+            from_user_id: sender.id,
+            from_user_name: sender.display_name,
+            from_user_username: sender.username,
+            from_user_avatar: sender.avatar_url,
+            content: `wants to connect with you in a dedicated ${payload.relationType || 'couple'} space ❤️`,
+            created_at: new Date().toISOString(),
+            is_read: false,
+            request_status: 'pending',
+          };
+          setNotifications((prev) => [newNotif, ...prev]);
+        }
+
+        // 7. Direct chat message received
+        if (payload.type === 'dm_message' && payload.targetUserId === (user?.id || profile?.id)) {
+          const msg: DirectChatMessage = payload.message;
+          const threadId = payload.isCouple ? 'thread_couple' : `thread_${msg.sender_id}`;
+          setDmStore((prev) => ({
+            ...prev,
+            [threadId]: [...(prev[threadId] || []), msg],
+          }));
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          // Announce own presence & request network profiles
+          if (profile && profile.id) {
+            channel.send({
+              type: 'broadcast',
+              event: 'social_event',
+              payload: { type: 'user_presence', profile },
+            });
+          }
+          channel.send({
+            type: 'broadcast',
+            event: 'social_event',
+            payload: { type: 'request_presence' },
+          });
+        }
+      });
+
+    realtimeChannelRef.current = channel;
+
+    return () => {
+      channel.unsubscribe();
+    };
+  }, [user?.id, profile]);
+
   // Feed Post Actions
   const createPost = (
     content: string,
     mediaUrl?: string | null,
     mediaType?: 'image' | 'video' | null,
-    tag?: string | null
+    tag?: string | null,
+    visibility: 'public' | 'private' | 'friends' = 'public'
   ) => {
     const newPost: FeedPost = {
-      id: 'post_' + Date.now(),
+      id: 'post_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       author_id: user?.id || 'me',
       author_name: profile?.display_name || 'My Name',
       author_username: profile?.username || 'me',
@@ -464,10 +388,18 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       is_liked_by_me: false,
       comments_count: 0,
       tag: tag || '#daily',
+      visibility,
       created_at: new Date().toISOString(),
     };
 
     setPosts((prev) => [newPost, ...prev]);
+
+    // Broadcast in real-time across devices
+    realtimeChannelRef.current?.send({
+      type: 'broadcast',
+      event: 'social_event',
+      payload: { type: 'new_post', post: newPost },
+    });
   };
 
   const deletePost = (postId: string) => {
@@ -568,11 +500,37 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Friendship Actions
   const sendFriendRequest = (targetUserId: string) => {
     setPendingSentFriendIds((prev) => (prev.includes(targetUserId) ? prev : [...prev, targetUserId]));
+
+    // Broadcast friend request over Supabase Realtime
+    if (profile) {
+      realtimeChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'social_event',
+        payload: {
+          type: 'friend_request',
+          sender: profile,
+          targetUserId,
+        },
+      });
+    }
   };
 
   const acceptFriendRequest = (targetUserId: string) => {
     setPendingReceivedFriendIds((prev) => prev.filter((id) => id !== targetUserId));
     setFriends((prev) => (prev.includes(targetUserId) ? prev : [...prev, targetUserId]));
+
+    // Broadcast acceptance
+    if (profile) {
+      realtimeChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'social_event',
+        payload: {
+          type: 'friend_accepted',
+          sender: profile,
+          targetUserId,
+        },
+      });
+    }
   };
 
   const declineFriendRequest = (targetUserId: string) => {
@@ -595,7 +553,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [friends, pendingSentFriendIds, pendingReceivedFriendIds]
   );
 
-  // Direct relationship proposal
+  // 1-Click Code-less Relationship linking
   const sendDirectRelationshipProposal = async (
     targetUserId: string,
     type: RelationshipType
@@ -607,6 +565,20 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     if (!friends.includes(targetUserId)) {
       setFriends((prev) => [...prev, targetUserId]);
+    }
+
+    // Broadcast couple proposal
+    if (profile) {
+      realtimeChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'social_event',
+        payload: {
+          type: 'couple_request',
+          sender: profile,
+          targetUserId,
+          relationType: type,
+        },
+      });
     }
 
     confetti({
@@ -631,6 +603,14 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const updateMyProfile = (updates: Partial<Profile>) => {
     updateProfile(updates);
+    if (profile) {
+      const updatedProfile = { ...profile, ...updates };
+      realtimeChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'social_event',
+        payload: { type: 'user_presence', profile: updatedProfile },
+      });
+    }
   };
 
   const userPosts = useCallback(
@@ -681,35 +661,26 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     );
   };
 
-  // Direct Threads computation
+  // Direct Threads computation (ONLY REAL USERS - NO BOTS)
   const directThreads = useMemo<DirectChatThread[]>(() => {
     const list: DirectChatThread[] = [];
 
-    // 1. Partner Couple thread (always top priority if partner or mock partner exists)
-    const partnerInfo: Profile = partnerProfile || {
-      id: 'partner',
-      email: 'partner@4ever.app',
-      username: 'sweetheart',
-      display_name: 'My Love',
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      is_online: true,
-      relationship_role: 'girlfriend',
-      relationship_partner_username: profile?.username || 'me',
-    };
+    // 1. Partner Couple thread (ONLY IF IN AN ACTIVE RELATIONSHIP OR PARTNER PROFILE EXISTS)
+    if (relationship && partnerProfile) {
+      const coupleMsgs = dmStore['thread_couple'] || [];
+      const lastCoupleMsg = coupleMsgs.length > 0 ? coupleMsgs[coupleMsgs.length - 1] : null;
 
-    const coupleMsgs = dmStore['thread_couple'] || [];
-    const lastCoupleMsg = coupleMsgs.length > 0 ? coupleMsgs[coupleMsgs.length - 1] : null;
+      list.push({
+        id: 'thread_couple',
+        participant: partnerProfile,
+        is_couple: true,
+        couple_role: (partnerProfile.relationship_role as any) || 'girlfriend',
+        last_message: lastCoupleMsg,
+        unread_count: 0,
+      });
+    }
 
-    list.push({
-      id: 'thread_couple',
-      participant: partnerInfo,
-      is_couple: true,
-      couple_role: (partnerInfo.relationship_role as any) || 'girlfriend',
-      last_message: lastCoupleMsg,
-      unread_count: 0,
-    });
-
-    // 2. Friends threads
+    // 2. Real Friends threads
     for (const friendId of friends) {
       const friendProfile = allUsers.find((u) => u.id === friendId);
       if (!friendProfile) continue;
@@ -730,7 +701,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     return list;
-  }, [partnerProfile, dmStore, friends, allUsers, profile, user]);
+  }, [relationship, partnerProfile, dmStore, friends, allUsers, user]);
 
   const getMessagesForThread = useCallback(
     (threadId: string): DirectChatMessage[] => {
@@ -749,7 +720,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!content.trim() && !mediaUrl && !metadata) return;
 
     const newMsg: DirectChatMessage = {
-      id: 'dm_msg_' + Date.now(),
+      id: 'dm_msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       thread_id: threadId,
       sender_id: user?.id || 'me',
       sender_name: profile?.display_name || 'My Name',
@@ -768,33 +739,28 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       [threadId]: [...(prev[threadId] || []), newMsg],
     }));
 
-    // Simulate smart partner response in couple thread
+    // Broadcast message to the real recipient over Supabase Realtime (NO BOTS!)
+    let targetUserId: string | null = null;
+    let isCouple = false;
+
     if (threadId === 'thread_couple') {
-      setTimeout(() => {
-        const responses = [
-          'Aww love you so much! ❤️',
-          'Thinking about you too baby 🥰',
-          'Can’t wait to see you soon! ✨',
-          'Sending you a big warm hug 🤗❤️',
-        ];
-        const randomReply = responses[Math.floor(Math.random() * responses.length)];
-        const replyMsg: DirectChatMessage = {
-          id: 'dm_reply_' + Date.now(),
-          thread_id: 'thread_couple',
-          sender_id: partnerProfile?.id || 'partner',
-          sender_name: partnerProfile?.display_name || 'My Love',
-          sender_username: partnerProfile?.username || 'sweetheart',
-          sender_avatar: partnerProfile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-          content: randomReply,
-          type: 'text',
-          is_read: true,
-          created_at: new Date().toISOString(),
-        };
-        setDmStore((prev) => ({
-          ...prev,
-          thread_couple: [...(prev['thread_couple'] || []), replyMsg],
-        }));
-      }, 1400);
+      targetUserId = partnerProfile?.id || null;
+      isCouple = true;
+    } else if (threadId.startsWith('thread_')) {
+      targetUserId = threadId.replace('thread_', '');
+    }
+
+    if (targetUserId) {
+      realtimeChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'social_event',
+        payload: {
+          type: 'dm_message',
+          message: newMsg,
+          targetUserId,
+          isCouple,
+        },
+      });
     }
   };
 
