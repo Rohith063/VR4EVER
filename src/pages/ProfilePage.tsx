@@ -21,7 +21,7 @@ import { useSocial } from '../context/SocialContext';
 import { calculateRelationshipTime, resizeAndCompressImage } from '../lib/utils';
 
 export const ProfilePage: React.FC = () => {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, updateProfile } = useAuth();
   const { relationship, partnerProfile } = useRelationship();
   const { userPosts, updateMyProfile, friends } = useSocial();
 
@@ -36,6 +36,17 @@ export const ProfilePage: React.FC = () => {
   const [coverUrl, setCoverUrl] = useState(profile?.cover_url || '');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Sync profile into edit form when profile loads or modal opens
+  React.useEffect(() => {
+    if (profile) {
+      setDisplayName(profile.display_name || '');
+      setUsername(profile.username || '');
+      setBio(profile.bio || '');
+      setAvatarUrl(profile.avatar_url || '');
+      setCoverUrl(profile.cover_url || '');
+    }
+  }, [profile, editModalOpen]);
+
   // File input refs for uploading images directly from device
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +59,7 @@ export const ProfilePage: React.FC = () => {
     try {
       const compressed = await resizeAndCompressImage(file, 1400, 600, 0.85);
       setCoverUrl(compressed);
+      await updateProfile({ cover_url: compressed });
       updateMyProfile({ cover_url: compressed });
     } catch (err) {
       console.error('Failed to process banner image', err);
@@ -60,6 +72,7 @@ export const ProfilePage: React.FC = () => {
     try {
       const compressed = await resizeAndCompressImage(file, 600, 600, 0.85);
       setAvatarUrl(compressed);
+      await updateProfile({ avatar_url: compressed });
       updateMyProfile({ avatar_url: compressed });
     } catch (err) {
       console.error('Failed to process avatar image', err);
@@ -97,15 +110,17 @@ export const ProfilePage: React.FC = () => {
     ? calculateRelationshipTime(relationship.start_date)
     : null;
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateMyProfile({
+    const updates = {
       display_name: displayName.trim() || profile?.display_name,
       username: username.trim().toLowerCase().replace(/\s+/g, '_') || profile?.username,
-      bio: bio.trim(),
-      avatar_url: avatarUrl.trim() || null,
-      cover_url: coverUrl.trim() || null,
-    });
+      bio: bio,
+      avatar_url: avatarUrl.trim() || profile?.avatar_url || null,
+      cover_url: coverUrl.trim() || profile?.cover_url || null,
+    };
+    await updateProfile(updates);
+    updateMyProfile(updates);
     setSaveSuccess(true);
     setTimeout(() => {
       setSaveSuccess(false);

@@ -17,12 +17,39 @@ interface AuthContextType {
   refreshProfile: () => Promise<void>;
 }
 
+const CURRENT_PROFILE_KEY = '4ever_current_profile';
+export const REGISTERED_PROFILES_KEY = '4ever_registered_profiles_v1';
+
+export const saveToRegisteredProfiles = (p: Profile) => {
+  try {
+    const raw = localStorage.getItem(REGISTERED_PROFILES_KEY);
+    const list: Profile[] = raw ? JSON.parse(raw) : [];
+    const index = list.findIndex((item) => item.id === p.id || (p.email && item.email === p.email));
+    if (index >= 0) {
+      list[index] = { ...list[index], ...p };
+    } else {
+      list.unshift(p);
+    }
+    localStorage.setItem(REGISTERED_PROFILES_KEY, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(() => {
+    try {
+      const stored = localStorage.getItem(CURRENT_PROFILE_KEY);
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+    return null;
+  });
   const [loading, setLoading] = useState<boolean>(true);
 
   const fetchProfile = async (
@@ -30,6 +57,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email?: string,
     metadata?: Record<string, unknown>
   ) => {
+    // 1. Immediately load matching cached profile if available to avoid any blank flicker
+    let cached: Profile | null = null;
+    try {
+      const stored = localStorage.getItem(`4ever_profile_${userId}`) || localStorage.getItem(CURRENT_PROFILE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.id === userId) {
+          cached = parsed;
+          setProfile(cached);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     try {
       const { data } = await supabase
         .from('profiles')
@@ -38,57 +80,84 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .maybeSingle();
 
       if (data) {
-        setProfile(data as Profile);
+        // Merge Supabase data with cached profile (preserving non-empty fields like bio if remote has null)
+        const merged: Profile = {
+          ...cached,
+          ...(data as Profile),
+          bio: (data as Profile).bio || cached?.bio || '',
+          avatar_url: (data as Profile).avatar_url || cached?.avatar_url || null,
+          cover_url: (data as Profile).cover_url || cached?.cover_url || null,
+          is_online: true,
+          last_seen: new Date().toISOString(),
+        };
+        setProfile(merged);
+        localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(merged));
+        localStorage.setItem(`4ever_profile_${userId}`, JSON.stringify(merged));
+        saveToRegisteredProfiles(merged);
       } else {
         // Fallback default profile from user metadata (e.g. Google OAuth or email)
         const metaName =
           (metadata?.full_name as string) ||
           (metadata?.name as string) ||
           (metadata?.display_name as string);
-        const displayName = metaName || (email ? email.split('@')[0] : 'User');
-        const username = (
+        const displayName = cached?.display_name || metaName || (email ? email.split('@')[0] : 'User');
+        const username = cached?.username || (
           email ? email.split('@')[0] : 'user_' + userId.slice(0, 5)
         )
           .toLowerCase()
           .replace(/\s+/g, '_');
         const avatarUrl =
+          cached?.avatar_url ||
           (metadata?.avatar_url as string) ||
           (metadata?.picture as string) ||
           null;
 
         const newProfile: Profile = {
           id: userId,
-          email: email || '',
+          email: email || cached?.email || '',
           username,
           display_name: displayName,
           avatar_url: avatarUrl,
+          cover_url: cached?.cover_url || null,
+          bio: cached?.bio || '',
           is_online: true,
           last_seen: new Date().toISOString(),
         };
 
         try {
-          await supabase.from('profiles').insert([newProfile]);
+          await supabase.from('profiles').upsert([newProfile], { onConflict: 'id' });
         } catch {
           // ignore if table doesn't exist yet or RLS prevents direct insert
         }
 
         setProfile(newProfile);
+        localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(newProfile));
+        localStorage.setItem(`4ever_profile_${userId}`, JSON.stringify(newProfile));
+        saveToRegisteredProfiles(newProfile);
       }
     } catch {
       // Local fallback for offline/demo mode
       const metaName =
         (metadata?.full_name as string) || (metadata?.name as string);
       const localName =
+        cached?.display_name ||
         localStorage.getItem('4ever_username') ||
         metaName ||
         (email ? email.split('@')[0] : 'User');
-      setProfile({
+      const fallbackProfile: Profile = {
         id: userId,
-        email: email || '',
-        username: localName.toLowerCase().replace(/\s+/g, '_'),
+        email: email || cached?.email || '',
+        username: cached?.username || localName.toLowerCase().replace(/\s+/g, '_'),
         display_name: localName,
+        bio: cached?.bio || '',
+        avatar_url: cached?.avatar_url || null,
+        cover_url: cached?.cover_url || null,
         is_online: true,
-      });
+      };
+      setProfile(fallbackProfile);
+      localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(fallbackProfile));
+      localStorage.setItem(`4ever_profile_${userId}`, JSON.stringify(fallbackProfile));
+      saveToRegisteredProfiles(fallbackProfile);
     }
   };
 
@@ -225,6 +294,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // ignore
     }
     localStorage.removeItem('4ever_guest_user');
+    localStorage.removeItem(CURRENT_PROFILE_KEY);
     setUser(null);
     setSession(null);
     setProfile(null);
@@ -232,12 +302,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateProfile = async (updates: Partial<Profile>) => {
     if (!user) return;
+    const current = profile || ({ id: user.id, email: user.email || '' } as Profile);
+    const updated: Profile = {
+      ...current,
+      ...updates,
+      id: user.id,
+      email: user.email || current.email || '',
+      last_seen: new Date().toISOString(),
+    };
+
+    // 1. Immediately update in-memory React state
+    setProfile(updated);
+
+    // 2. Persist to localStorage immediately
     try {
-      await supabase.from('profiles').update(updates).eq('id', user.id);
+      localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(updated));
+      localStorage.setItem(`4ever_profile_${user.id}`, JSON.stringify(updated));
+      saveToRegisteredProfiles(updated);
     } catch {
       // ignore
     }
-    setProfile((prev) => (prev ? { ...prev, ...updates } : null));
+
+    // 3. Upsert to Supabase profiles table
+    try {
+      const { error } = await supabase.from('profiles').upsert([updated], { onConflict: 'id' });
+      if (error) {
+        await supabase.from('profiles').update(updates).eq('id', user.id);
+      }
+    } catch (err) {
+      console.warn('Failed to upsert profile to Supabase:', err);
+    }
   };
 
   const refreshProfile = async () => {
