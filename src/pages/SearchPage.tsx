@@ -11,6 +11,7 @@ import {
   Clock,
   X,
   ArrowRight,
+  MessageCircle,
 } from 'lucide-react';
 import { useSocial } from '../context/SocialContext';
 import { useAuth } from '../context/AuthContext';
@@ -28,6 +29,8 @@ export const SearchPage: React.FC = () => {
     acceptFriendRequest,
     getFriendshipStatus,
     sendDirectRelationshipProposal,
+    openUserProfile,
+    openDirectChatWithUser,
   } = useSocial();
 
   const [query, setQuery] = useState('');
@@ -157,7 +160,7 @@ export const SearchPage: React.FC = () => {
                 {/* User Info */}
                 <div
                   className="flex items-center gap-3.5 cursor-pointer flex-1"
-                  onClick={() => setSelectedUserForModal(targetUser)}
+                  onClick={() => openUserProfile(targetUser.id)}
                 >
                   <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-amber-500/30 to-amber-300/10 border border-amber-400/30 flex items-center justify-center text-sm font-bold text-amber-300 overflow-hidden shrink-0 shadow-md">
                     {targetUser.avatar_url ? (
@@ -172,7 +175,7 @@ export const SearchPage: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-semibold text-white truncate hover:underline">
+                      <h4 className="text-sm font-semibold text-white truncate hover:text-amber-300 transition-colors">
                         {targetUser.display_name}
                       </h4>
                       {targetUser.is_online && (
@@ -188,6 +191,16 @@ export const SearchPage: React.FC = () => {
 
                 {/* Actions Row */}
                 <div className="flex items-center gap-2 shrink-0">
+                  {/* Quick Message Button */}
+                  <button
+                    type="button"
+                    onClick={() => openDirectChatWithUser(targetUser.id)}
+                    className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-amber-300 transition-colors cursor-pointer"
+                    title="Send Direct Message"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                  </button>
+
                   {/* Friend Button */}
                   {status === 'friends' ? (
                     <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-white/70 text-xs font-semibold flex items-center gap-1.5">
@@ -201,6 +214,7 @@ export const SearchPage: React.FC = () => {
                     </span>
                   ) : status === 'pending_received' ? (
                     <button
+                      type="button"
                       onClick={() => acceptFriendRequest(targetUser.id)}
                       className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
@@ -209,6 +223,7 @@ export const SearchPage: React.FC = () => {
                     </button>
                   ) : (
                     <button
+                      type="button"
                       onClick={() => sendFriendRequest(targetUser.id)}
                       className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                     >
@@ -225,6 +240,7 @@ export const SearchPage: React.FC = () => {
                     </span>
                   ) : (
                     <button
+                      type="button"
                       onClick={() => setSelectedUserForModal(targetUser)}
                       className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-xs flex items-center gap-1 shadow-md shadow-amber-500/20 transition-all active:scale-95 cursor-pointer"
                     >

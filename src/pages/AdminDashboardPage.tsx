@@ -89,7 +89,7 @@ export const AdminDashboardPage: React.FC = () => {
       },
       {
         id: 'usr_admin',
-        display_name: 'Directus Root Admin',
+        display_name: 'Platform Root Admin',
         username: 'admin',
         email: 'admin@4ever.app',
         role: 'admin',
@@ -98,7 +98,7 @@ export const AdminDashboardPage: React.FC = () => {
         storage_used_mb: 5.4,
         storage_limit_mb: 500,
         is_online: true,
-        last_seen: 'Managing Directus',
+        last_seen: 'Managing Admin CMS',
         created_at: new Date(Date.now() - 86400000 * 90).toISOString(),
       },
     ];
@@ -289,17 +289,17 @@ export const AdminDashboardPage: React.FC = () => {
           className="w-full max-w-md bg-[#181a20] border border-[#2b2e3b] rounded-3xl p-8 shadow-2xl space-y-6"
         >
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#6644ff] text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-[#6644ff]/30">
-              D
+            <div className="w-12 h-12 rounded-2xl bg-[#6644ff] text-white flex items-center justify-center font-black text-lg shadow-lg shadow-[#6644ff]/30">
+              CMS
             </div>
             <div>
               <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
                 <span>VR4EVER</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-[#6644ff]/20 text-[#a088ff] border border-[#6644ff]/40 font-mono">
-                  Directus CMS
+                  Admin CMS Management
                 </span>
               </h1>
-              <p className="text-xs text-slate-400">Isolated Headless Admin & Storage Manager</p>
+              <p className="text-xs text-slate-400">Headless Admin & Storage Quota Management</p>
             </div>
           </div>
 
@@ -333,7 +333,7 @@ export const AdminDashboardPage: React.FC = () => {
               type="submit"
               className="w-full py-3 rounded-xl bg-[#6644ff] hover:bg-[#7952ff] text-white font-semibold text-sm transition-all shadow-lg shadow-[#6644ff]/30 cursor-pointer"
             >
-              Sign In to Directus Portal
+              Sign In to Admin Portal
             </button>
           </form>
 
@@ -355,11 +355,11 @@ export const AdminDashboardPage: React.FC = () => {
         <div>
           {/* Directus Brand Header */}
           <div className="h-16 flex items-center gap-3 px-4 md:px-6 border-b border-[#242733]">
-            <div className="w-9 h-9 rounded-xl bg-[#6644ff] text-white font-black text-xl flex items-center justify-center shrink-0 shadow-md shadow-[#6644ff]/30">
-              D
+            <div className="w-9 h-9 rounded-xl bg-[#6644ff] text-white font-black text-sm flex items-center justify-center shrink-0 shadow-md shadow-[#6644ff]/30">
+              CMS
             </div>
             <div className="hidden md:block min-w-0">
-              <h2 className="text-sm font-bold text-white truncate">VR4EVER Cloud</h2>
+              <h2 className="text-sm font-bold text-white truncate">VR4EVER Admin</h2>
               <span className="text-[10px] text-emerald-400 font-mono block">v10.12 • Live</span>
             </div>
           </div>
@@ -446,7 +446,7 @@ export const AdminDashboardPage: React.FC = () => {
             title="Log Out"
           >
             <LogOut className="w-4 h-4 shrink-0" />
-            <span className="hidden md:inline">Directus Sign Out</span>
+            <span className="hidden md:inline">Admin Sign Out</span>
           </button>
         </div>
       </aside>
@@ -531,7 +531,7 @@ export const AdminDashboardPage: React.FC = () => {
               <div className="bg-[#181a22] border border-[#272b38] rounded-2xl p-6 space-y-4">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  <span>Directus System & API Status</span>
+                  <span>Admin CMS Platform & API Status</span>
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                   <div className="p-3 rounded-xl bg-[#20232e]">
@@ -544,7 +544,7 @@ export const AdminDashboardPage: React.FC = () => {
                   </div>
                   <div className="p-3 rounded-xl bg-[#20232e]">
                     <span className="text-slate-400 block">Storage Driver</span>
-                    <span className="font-semibold text-white">Directus S3 / Local</span>
+                    <span className="font-semibold text-white">Cloud S3 / Local</span>
                   </div>
                   <div className="p-3 rounded-xl bg-[#20232e]">
                     <span className="text-slate-400 block">Vercel Deployment</span>
@@ -808,7 +808,7 @@ export const AdminDashboardPage: React.FC = () => {
             <div className="max-w-xl bg-[#181a22] border border-[#272b38] rounded-2xl p-6 space-y-5">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <SettingsIcon className="w-4 h-4 text-[#a088ff]" />
-                <span>Directus Project Settings</span>
+                <span>Admin CMS Platform Settings</span>
               </h3>
 
               <div className="space-y-3 text-xs">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Settings as SettingsIcon,
@@ -476,24 +476,84 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 7. Staff Admin Portal Quick Link */}
-      <div className="glass-card rounded-3xl border border-amber-500/30 p-6 shadow-xl flex items-center justify-between bg-amber-500/5">
-        <div>
-          <span className="text-[10px] uppercase tracking-wider text-amber-400 font-bold block">
-            Staff & Platform Management
+      {/* 7. Manage Accounts (Instagram Style) */}
+      <div className="glass-card rounded-3xl border border-white/10 p-6 shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-amber-400" />
+            <h2 className="text-sm font-semibold text-white uppercase tracking-wider">
+              Manage Accounts
+            </h2>
+          </div>
+          <span className="text-[10px] uppercase tracking-wider text-white/40 font-mono">
+            Multi-Account
           </span>
-          <h4 className="text-sm font-bold text-white mt-0.5">Staff & Admin Dashboard</h4>
-          <p className="text-xs text-white/50 mt-0.5">
-            Manage users, view storage analytics, activity logs, and create test accounts.
-          </p>
         </div>
 
-        <Link
-          to="/admin"
-          className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-all shadow-md active:scale-95 cursor-pointer"
-        >
-          Open Admin
-        </Link>
+        <p className="text-xs text-white/50">
+          Switch between your accounts or add a secondary test profile without logging out.
+        </p>
+
+        {/* Current Active Account Card */}
+        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-amber-500/20 ring-2 ring-amber-400 flex items-center justify-center font-bold text-amber-300 text-sm">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+              ) : (
+                profile?.display_name?.slice(0, 1) || 'U'
+              )}
+            </div>
+            <div>
+              <p className="font-semibold text-xs text-white flex items-center gap-1.5">
+                <span>{profile?.display_name}</span>
+                <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-400 text-black font-bold">Active</span>
+              </p>
+              <p className="text-[11px] text-white/50">@{profile?.username} • {profile?.email}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => signOut()}
+            className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white/80 text-xs font-medium transition-colors cursor-pointer"
+          >
+            Log Out
+          </button>
+        </div>
+
+        {/* Quick Switch Profiles */}
+        <div className="pt-2 border-t border-white/5 space-y-2">
+          <p className="text-[11px] text-white/40 font-medium">Quick Switch to Another Account:</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {[
+              { name: 'Ananya Verma', username: 'ananya_v', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' },
+              { name: 'Rahul Sharma', username: 'rahul_s', avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80' },
+            ].map((acc) => (
+              <button
+                key={acc.username}
+                type="button"
+                onClick={async () => {
+                  await updateProfile({
+                    display_name: acc.name,
+                    username: acc.username,
+                    avatar_url: acc.avatar,
+                  });
+                  window.location.reload();
+                }}
+                className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-between text-left transition-all cursor-pointer group"
+              >
+                <div className="flex items-center space-x-2">
+                  <img src={acc.avatar} alt={acc.name} className="w-7 h-7 rounded-full object-cover" />
+                  <div className="text-xs">
+                    <p className="font-semibold text-white group-hover:text-amber-300 transition-colors">{acc.name}</p>
+                    <p className="text-[10px] text-white/40">@{acc.username}</p>
+                  </div>
+                </div>
+                <span className="text-[11px] text-amber-300 group-hover:underline">Switch</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* 8. Danger Zone: Leave Space & Delete Account */}

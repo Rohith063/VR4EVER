@@ -11,16 +11,15 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { RelationshipProvider, useRelationship } from './context/RelationshipContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AppLockProvider } from './context/AppLockContext';
-import { SocialProvider } from './context/SocialContext';
+import { SocialProvider, useSocial } from './context/SocialContext';
 
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
-import { ChatDrawer } from './components/ChatDrawer';
-import { LocationModal } from './components/LocationModal';
-import { CameraModal } from './components/CameraModal';
-import { RequestsModal } from './components/RequestsModal';
 import { AppLockModal } from './components/AppLockModal';
 import { SpaceHubModal } from './components/SpaceHubModal';
+import { DirectMessagesModal } from './components/DirectMessagesModal';
+import { NotificationsModal } from './components/NotificationsModal';
+import { UserProfileModal } from './components/UserProfileModal';
 
 import { HomePage } from './pages/HomePage';
 import { FeedsPage } from './pages/FeedsPage';
@@ -39,13 +38,9 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 const AppLayout: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
   const { loading: relLoading } = useRelationship();
+  const { setIsMessagesOpen, setIsNotificationsOpen } = useSocial();
   const location = useLocation();
 
-  // Modals state
-  const [chatOpen, setChatOpen] = useState(false);
-  const [locationOpen, setLocationOpen] = useState(false);
-  const [cameraOpen, setCameraOpen] = useState(false);
-  const [requestsOpen, setRequestsOpen] = useState(false);
   const [hubOpen, setHubOpen] = useState(false);
 
   // Allow admin and auth routes anytime
@@ -88,13 +83,7 @@ const AppLayout: React.FC = () => {
 
       {/* Global Navbar */}
       {!isAuthPage && !isAdminRoute && (
-        <Navbar
-          onOpenChat={() => setChatOpen(true)}
-          onOpenLocation={() => setLocationOpen(true)}
-          onOpenCamera={() => setCameraOpen(true)}
-          onOpenRequests={() => setRequestsOpen(true)}
-          onOpenHub={() => setHubOpen(true)}
-        />
+        <Navbar onOpenHub={() => setHubOpen(true)} />
       )}
 
       {/* Main Content Area */}
@@ -113,10 +102,10 @@ const AppLayout: React.FC = () => {
             path="/"
             element={
               <HomePage
-                onOpenChat={() => setChatOpen(true)}
-                onOpenLocation={() => setLocationOpen(true)}
-                onOpenCamera={() => setCameraOpen(true)}
-                onOpenRequests={() => setRequestsOpen(true)}
+                onOpenChat={() => setIsMessagesOpen(true)}
+                onOpenLocation={() => setHubOpen(true)}
+                onOpenCamera={() => {}}
+                onOpenRequests={() => setIsNotificationsOpen(true)}
               />
             }
           />
@@ -139,33 +128,14 @@ const AppLayout: React.FC = () => {
       {/* Global Space Hub Launcher Modal */}
       <SpaceHubModal isOpen={hubOpen} onClose={() => setHubOpen(false)} />
 
-      {/* Global Modals */}
-      {!isAdminRoute && (
-        <>
-          <ChatDrawer
-            isOpen={chatOpen}
-            onClose={() => setChatOpen(false)}
-            onOpenCamera={() => {
-              setChatOpen(false);
-              setCameraOpen(true);
-            }}
-            onOpenLocation={() => {
-              setChatOpen(false);
-              setLocationOpen(true);
-            }}
-          />
-          <LocationModal isOpen={locationOpen} onClose={() => setLocationOpen(false)} />
-          <CameraModal
-            isOpen={cameraOpen}
-            onClose={() => setCameraOpen(false)}
-            onPhotoCaptured={() => {
-              setCameraOpen(false);
-              setChatOpen(true);
-            }}
-          />
-          <RequestsModal isOpen={requestsOpen} onClose={() => setRequestsOpen(false)} />
-        </>
-      )}
+      {/* Direct Messages Modal (Instagram DMs) */}
+      <DirectMessagesModal />
+
+      {/* In-App Notifications Modal */}
+      <NotificationsModal />
+
+      {/* Full Instagram-style Friend / User Profile Modal */}
+      <UserProfileModal />
     </div>
   );
 };

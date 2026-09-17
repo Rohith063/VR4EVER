@@ -2,65 +2,37 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Heart,
-  Camera,
-  MapPin,
   MessageCircle,
-  Users,
+  Bell,
   Search,
   LayoutGrid,
   User,
   LogOut,
   Sparkles,
   ChevronDown,
-  Sun,
-  Moon,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useRelationship } from '../context/RelationshipContext';
-import { useTheme } from '../context/ThemeContext';
-import { calculateDistance, calculateRelationshipTime } from '../lib/utils';
+import { useSocial } from '../context/SocialContext';
+import { calculateRelationshipTime } from '../lib/utils';
 
 interface NavbarProps {
-  onOpenChat: () => void;
-  onOpenLocation: () => void;
-  onOpenCamera: () => void;
-  onOpenRequests: () => void;
   onOpenHub?: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({
-  onOpenChat,
-  onOpenLocation,
-  onOpenCamera,
-  onOpenRequests,
-  onOpenHub,
-}) => {
+export const Navbar: React.FC<NavbarProps> = ({ onOpenHub }) => {
   const { pathname } = useLocation();
   const { profile, signOut } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { relationship, partnerProfile, isPartnerOnline } = useRelationship();
   const {
-    relationship,
-    partnerProfile,
-    isPartnerOnline,
-    partnerLocation,
-    myLocation,
-    incomingRequests,
-    disconnectRelationship,
-  } = useRelationship();
+    unreadNotificationsCount,
+    unreadMessagesCount,
+    setIsNotificationsOpen,
+    setIsMessagesOpen,
+  } = useSocial();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
-
-  // Compute live distance if both have shared coordinates
-  const distanceKm =
-    myLocation && partnerLocation && partnerLocation.is_sharing
-      ? calculateDistance(
-          myLocation.latitude,
-          myLocation.longitude,
-          partnerLocation.latitude,
-          partnerLocation.longitude
-        )
-      : null;
 
   const partnerName =
     relationship?.custom_nickname_2 || partnerProfile?.display_name || 'Partner';
@@ -77,7 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-[#0c0d11]/85 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-[#0c0d11]/90 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
         {/* Brand & Relationship Info */}
         <div className="flex items-center gap-3">
@@ -92,8 +64,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {relationship ? (
             <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-white/10">
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/5 border border-white/10 text-white/70 capitalize">
-                {relationship.relation_type}
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/15 border border-rose-500/30 text-rose-300 flex items-center gap-1">
+                <Heart className="w-2.5 h-2.5 fill-rose-300" />
+                <span>{relationship.relation_type}</span>
               </span>
               {timeTogether && (
                 <span className="text-xs text-amber-400/90 font-medium">
@@ -104,11 +77,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           ) : (
             <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-white/10">
               <Link
-                to="/onboarding"
+                to="/search"
                 className="px-2.5 py-1 rounded-full bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 text-[11px] font-semibold flex items-center gap-1.5 transition-colors"
               >
                 <Sparkles className="w-3 h-3" />
-                <span>Connect Partner</span>
+                <span>Find Someone</span>
               </Link>
             </div>
           )}
@@ -146,7 +119,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </nav>
 
-        {/* Right Tools & Partner Status */}
+        {/* Right Tools (Clean Instagram Style: Notifications, DMs & Profile) */}
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Partner status capsule (if paired) */}
           {relationship && (
@@ -166,82 +139,52 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="font-medium text-white/90 max-w-[90px] truncate">
                 {partnerName}
               </span>
-
-              {distanceKm !== null && (
-                <span className="px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-400 text-[10px] font-medium border border-amber-500/20">
-                  {distanceKm < 1 ? `${Math.round(distanceKm * 1000)}m` : `${distanceKm.toFixed(1)}km`}
-                </span>
-              )}
             </div>
           )}
 
-          {/* Quick Action Tools */}
+          {/* Notifications Bell */}
           <button
-            onClick={onOpenChat}
-            title="Open Chat"
-            className="relative p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95"
+            type="button"
+            onClick={() => setIsNotificationsOpen(true)}
+            title="Notifications"
+            className="relative p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95 cursor-pointer"
           >
-            <MessageCircle className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={onOpenLocation}
-            title="Live Location"
-            className="relative p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95"
-          >
-            <MapPin className="w-4 h-4" />
-            {partnerLocation?.is_sharing && (
-              <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400" />
-            )}
-          </button>
-
-          <button
-            onClick={onOpenCamera}
-            title="Camera & Filters"
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95"
-          >
-            <Camera className="w-4 h-4" />
-          </button>
-
-          <button
-            onClick={onOpenRequests}
-            title="Pairing & Requests"
-            className="relative p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95"
-          >
-            <Users className="w-4 h-4" />
-            {incomingRequests.length > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center animate-bounce">
-                {incomingRequests.length}
+            <Bell className="w-4 h-4" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center animate-bounce shadow-md shadow-rose-500/40">
+                {unreadNotificationsCount}
               </span>
             )}
           </button>
 
-          {/* Light / Dark Mode Toggle */}
+          {/* Direct Messages Icon */}
           <button
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95"
+            type="button"
+            onClick={() => setIsMessagesOpen(true)}
+            title="Direct Messages"
+            className="relative p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95 cursor-pointer"
           >
-            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-sky-400" />}
+            <MessageCircle className="w-4 h-4" />
+            {unreadMessagesCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-black text-[9px] font-bold flex items-center justify-center shadow-md shadow-amber-500/40">
+                {unreadMessagesCount}
+              </span>
+            )}
           </button>
-
-          {/* Settings Link */}
-          <Link
-            to="/settings"
-            title="Settings & Privacy"
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95 hidden sm:flex"
-          >
-            <SettingsIcon className="w-4 h-4" />
-          </Link>
 
           {/* User Menu Dropdown */}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setDropdownOpen((prev) => !prev)}
-              className="flex items-center gap-1.5 p-1 sm:px-2 py-1 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs transition-colors"
+              className="flex items-center gap-1.5 p-1 sm:px-2 py-1 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs transition-colors cursor-pointer"
             >
-              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-400 to-amber-600 text-black font-bold flex items-center justify-center text-[11px] uppercase">
-                {profile?.display_name?.slice(0, 1) || 'U'}
+              <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-tr from-amber-400 to-amber-600 text-black font-bold flex items-center justify-center text-[11px] uppercase ring-1 ring-white/20">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt={profile.display_name} className="w-full h-full object-cover" />
+                ) : (
+                  profile?.display_name?.slice(0, 1) || 'U'
+                )}
               </div>
               <ChevronDown className="w-3 h-3 text-white/50 hidden sm:block" />
             </button>
@@ -263,44 +206,30 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
 
                   <Link
+                    to="/profile"
+                    onClick={() => setDropdownOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 transition-colors"
+                  >
+                    <User className="w-3.5 h-3.5 text-amber-400" />
+                    <span>My Profile</span>
+                  </Link>
+
+                  <Link
                     to="/settings"
                     onClick={() => setDropdownOpen(false)}
                     className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 transition-colors"
                   >
                     <SettingsIcon className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Settings & Privacy Lock</span>
+                    <span>Settings & Appearance</span>
                   </Link>
-
-                  <Link
-                    to="/onboarding"
-                    onClick={() => setDropdownOpen(false)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 transition-colors"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <span>{relationship ? 'Manage Space & Code' : 'Build / Connect Relationship'}</span>
-                  </Link>
-
-                  {relationship && (
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false);
-                        if (confirm('Disconnect from current partner space?')) {
-                          disconnectRelationship();
-                        }
-                      }}
-                      className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-rose-500/10 text-rose-300 transition-colors"
-                    >
-                      <LogOut className="w-3.5 h-3.5" />
-                      <span>Leave Space</span>
-                    </button>
-                  )}
 
                   <button
+                    type="button"
                     onClick={() => {
                       setDropdownOpen(false);
                       signOut();
                     }}
-                    className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white transition-colors border-t border-white/10 pt-2"
+                    className="w-full text-left flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-white/60 hover:text-white transition-colors border-t border-white/10 pt-2 cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Sign Out</span>

@@ -16,6 +16,9 @@ export interface Profile {
   is_online?: boolean;
   last_seen?: string;
   created_at?: string;
+  relationship_partner_username?: string | null;
+  relationship_partner_name?: string | null;
+  relationship_role?: 'girlfriend' | 'boyfriend' | 'partner' | null;
 }
 
 export interface Relationship {
@@ -228,3 +231,46 @@ export interface DirectusAssetRecord {
   uploaded_at: string;
   url: string;
 }
+
+export interface DirectChatMessage {
+  id: string;
+  thread_id: string;
+  sender_id: string;
+  sender_name: string;
+  sender_username: string;
+  sender_avatar?: string | null;
+  content: string;
+  type: 'text' | 'image' | 'video' | 'audio' | 'location';
+  media_url?: string | null;
+  metadata?: {
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    audio_duration?: number;
+  };
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface DirectChatThread {
+  id: string;
+  participant: Profile;
+  is_couple: boolean;
+  couple_role?: 'girlfriend' | 'boyfriend' | 'partner';
+  last_message?: DirectChatMessage | null;
+  unread_count: number;
+}
+
+export interface AppNotification {
+  id: string;
+  type: 'friend_request' | 'couple_request' | 'like' | 'comment';
+  from_user_id: string;
+  from_user_name: string;
+  from_user_username: string;
+  from_user_avatar?: string | null;
+  content: string;
+  created_at: string;
+  is_read: boolean;
+  request_status?: 'pending' | 'accepted' | 'declined';
+}
+

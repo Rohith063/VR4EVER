@@ -18,7 +18,7 @@ const FEED_TAGS = ['All', '#love', '#milestone', '#date', '#daily', '#thoughts']
 
 export const FeedsPage: React.FC = () => {
   const { profile } = useAuth();
-  const { posts, createPost, toggleLike, getComments, addComment } = useSocial();
+  const { posts, createPost, toggleLike, getComments, addComment, openUserProfile } = useSocial();
 
   const [activeTag, setActiveTag] = useState<string>('All');
   const [postContent, setPostContent] = useState('');
@@ -225,8 +225,11 @@ export const FeedsPage: React.FC = () => {
               >
                 {/* Author Info & Timestamp */}
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 flex items-center justify-center text-xs overflow-hidden shrink-0">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer group"
+                    onClick={() => openUserProfile(post.author_id)}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30 flex items-center justify-center text-xs overflow-hidden shrink-0 group-hover:ring-2 group-hover:ring-amber-400 transition-all">
                       {post.author_avatar ? (
                         <img src={post.author_avatar} alt={post.author_name} className="w-full h-full object-cover" />
                       ) : (
@@ -235,7 +238,7 @@ export const FeedsPage: React.FC = () => {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white hover:underline cursor-pointer">
+                        <span className="text-sm font-semibold text-white group-hover:text-amber-300 transition-colors">
                           {post.author_name}
                         </span>
                         <span className="text-xs text-white/40">

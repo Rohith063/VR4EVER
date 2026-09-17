@@ -1,35 +1,94 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import type { FeedPost, PostComment, Profile, RelationshipType } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import confetti from 'canvas-confetti';
+import type {
+  FeedPost,
+  PostComment,
+  Profile,
+  RelationshipType,
+  DirectChatMessage,
+  DirectChatThread,
+  AppNotification,
+} from '../types';
 import { useAuth } from './AuthContext';
 import { useRelationship } from './RelationshipContext';
 
 interface SocialContextType {
+  // Feed posts
   posts: FeedPost[];
-  createPost: (content: string, mediaUrl?: string | null, mediaType?: 'image' | 'video' | null, tag?: string | null) => void;
+  createPost: (
+    content: string,
+    mediaUrl?: string | null,
+    mediaType?: 'image' | 'video' | null,
+    tag?: string | null
+  ) => void;
   deletePost: (postId: string) => void;
   toggleLike: (postId: string) => void;
   getComments: (postId: string) => PostComment[];
   addComment: (postId: string, content: string) => void;
+  userPosts: (userId: string) => FeedPost[];
+
+  // Directory & Search
   allUsers: Profile[];
   searchUsers: (query: string) => Profile[];
+  getUserProfileById: (userId: string) => Profile | null;
+
+  // Friendships
   friends: string[]; // array of user IDs
   pendingSentFriendIds: string[];
   pendingReceivedFriendIds: string[];
   sendFriendRequest: (targetUserId: string) => void;
   acceptFriendRequest: (targetUserId: string) => void;
   declineFriendRequest: (targetUserId: string) => void;
+  deleteFriendship: (targetUserId: string) => void;
   getFriendshipStatus: (targetUserId: string) => 'none' | 'pending_sent' | 'pending_received' | 'friends';
-  sendDirectRelationshipProposal: (targetUserId: string, type: RelationshipType) => Promise<{ success: boolean; message: string }>;
+
+  // 1-Click Couple Relationship
+  sendDirectRelationshipProposal: (
+    targetUserId: string,
+    type: RelationshipType
+  ) => Promise<{ success: boolean; message: string }>;
+
+  // Profile modal viewing
+  selectedUserProfileId: string | null;
+  openUserProfile: (userId: string) => void;
+  closeUserProfile: () => void;
   updateMyProfile: (updates: Partial<Profile>) => void;
-  userPosts: (userId: string) => FeedPost[];
+
+  // Direct Messages
+  directThreads: DirectChatThread[];
+  activeThreadId: string | null;
+  setActiveThreadId: (threadId: string | null) => void;
+  getMessagesForThread: (threadId: string) => DirectChatMessage[];
+  sendDirectMessage: (
+    threadId: string,
+    content: string,
+    type?: 'text' | 'image' | 'video' | 'audio' | 'location',
+    mediaUrl?: string | null,
+    metadata?: DirectChatMessage['metadata']
+  ) => void;
+  openDirectChatWithUser: (userId: string) => void;
+  isMessagesOpen: boolean;
+  setIsMessagesOpen: (open: boolean) => void;
+  unreadMessagesCount: number;
+
+  // Notifications
+  notifications: AppNotification[];
+  unreadNotificationsCount: number;
+  isNotificationsOpen: boolean;
+  setIsNotificationsOpen: (open: boolean) => void;
+  markAllNotificationsRead: () => void;
+  acceptNotificationRequest: (notificationId: string) => Promise<void>;
+  declineNotificationRequest: (notificationId: string) => void;
 }
 
 const SocialContext = createContext<SocialContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_POSTS = '4ever_social_posts_v2';
-const LOCAL_STORAGE_COMMENTS = '4ever_social_comments_v2';
-const LOCAL_STORAGE_FRIENDS = '4ever_social_friends_v2';
-const LOCAL_STORAGE_USERS = '4ever_social_directory_v2';
+const LOCAL_STORAGE_POSTS = '4ever_social_posts_v3';
+const LOCAL_STORAGE_COMMENTS = '4ever_social_comments_v3';
+const LOCAL_STORAGE_FRIENDS = '4ever_social_friends_v3';
+const LOCAL_STORAGE_USERS = '4ever_social_directory_v3';
+const LOCAL_STORAGE_DM_MESSAGES = '4ever_social_dm_msgs_v3';
+const LOCAL_STORAGE_NOTIFS = '4ever_social_notifs_v3';
 
 const INITIAL_DIRECTORY_USERS: Profile[] = [
   {
@@ -43,6 +102,9 @@ const INITIAL_DIRECTORY_USERS: Profile[] = [
     posts_count: 14,
     friends_count: 28,
     is_online: true,
+    relationship_partner_username: 'arjun_m',
+    relationship_partner_name: 'Arjun Mehta',
+    relationship_role: 'girlfriend',
   },
   {
     id: 'usr_rahul',
@@ -55,6 +117,7 @@ const INITIAL_DIRECTORY_USERS: Profile[] = [
     posts_count: 8,
     friends_count: 19,
     is_online: true,
+    relationship_role: null,
   },
   {
     id: 'usr_priya',
@@ -67,6 +130,7 @@ const INITIAL_DIRECTORY_USERS: Profile[] = [
     posts_count: 22,
     friends_count: 45,
     is_online: false,
+    relationship_role: null,
   },
   {
     id: 'usr_arjun',
@@ -79,6 +143,9 @@ const INITIAL_DIRECTORY_USERS: Profile[] = [
     posts_count: 11,
     friends_count: 34,
     is_online: true,
+    relationship_partner_username: 'ananya_v',
+    relationship_partner_name: 'Ananya Verma',
+    relationship_role: 'boyfriend',
   },
   {
     id: 'usr_sneha',
@@ -91,6 +158,7 @@ const INITIAL_DIRECTORY_USERS: Profile[] = [
     posts_count: 19,
     friends_count: 52,
     is_online: false,
+    relationship_role: null,
   },
 ];
 
@@ -157,10 +225,49 @@ const INITIAL_FEED_POSTS: FeedPost[] = [
   },
 ];
 
+const INITIAL_NOTIFICATIONS: AppNotification[] = [
+  {
+    id: 'notif_1',
+    type: 'couple_request',
+    from_user_id: 'usr_priya',
+    from_user_name: 'Priya Kapoor',
+    from_user_username: 'priya_k',
+    from_user_avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
+    content: 'wants to connect with you in a dedicated Couple Space ❤️',
+    created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    is_read: false,
+    request_status: 'pending',
+  },
+  {
+    id: 'notif_2',
+    type: 'friend_request',
+    from_user_id: 'usr_arjun',
+    from_user_name: 'Arjun Mehta',
+    from_user_username: 'arjun_m',
+    from_user_avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+    content: 'sent you a friend request 👋',
+    created_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    is_read: false,
+    request_status: 'pending',
+  },
+  {
+    id: 'notif_3',
+    type: 'like',
+    from_user_id: 'usr_ananya',
+    from_user_name: 'Ananya Verma',
+    from_user_username: 'ananya_v',
+    from_user_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    content: 'liked your recent feed post ✨',
+    created_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
+    is_read: true,
+  },
+];
+
 export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile, updateProfile } = useAuth();
-  const { createSpace } = useRelationship();
+  const { relationship, partnerProfile, createSpace } = useRelationship();
 
+  // Posts state
   const [posts, setPosts] = useState<FeedPost[]>(() => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_POSTS);
@@ -171,6 +278,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return INITIAL_FEED_POSTS;
   });
 
+  // Comments state
   const [comments, setComments] = useState<Record<string, PostComment[]>>(() => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_COMMENTS);
@@ -194,6 +302,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   });
 
+  // User Directory state
   const [allUsers] = useState<Profile[]>(() => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_USERS);
@@ -204,20 +313,94 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return INITIAL_DIRECTORY_USERS;
   });
 
+  // Friends state
   const [friends, setFriends] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem(LOCAL_STORAGE_FRIENDS);
-      if (stored) return JSON.parse(stored).friends || ['usr_ananya'];
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed.friends)) return parsed.friends;
+      }
     } catch {
       // ignore
     }
-    return ['usr_ananya'];
+    return ['usr_ananya', 'usr_rahul'];
   });
 
   const [pendingSentFriendIds, setPendingSentFriendIds] = useState<string[]>([]);
-  const [pendingReceivedFriendIds, setPendingReceivedFriendIds] = useState<string[]>(['usr_priya']);
+  const [pendingReceivedFriendIds, setPendingReceivedFriendIds] = useState<string[]>(['usr_arjun']);
 
-  // Sync to localStorage
+  // Notifications state
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_NOTIFS);
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+    return INITIAL_NOTIFICATIONS;
+  });
+
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  // Direct Messages state
+  const [dmStore, setDmStore] = useState<Record<string, DirectChatMessage[]>>(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_DM_MESSAGES);
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+    return {
+      thread_couple: [
+        {
+          id: 'dm_init_1',
+          thread_id: 'thread_couple',
+          sender_id: 'partner',
+          sender_name: 'My Love',
+          sender_username: 'sweetheart',
+          content: 'Hey babe! Can’t wait for dinner later tonight ❤️',
+          type: 'text',
+          is_read: true,
+          created_at: new Date(Date.now() - 1000 * 60 * 40).toISOString(),
+        },
+      ],
+      thread_usr_ananya: [
+        {
+          id: 'dm_init_2',
+          thread_id: 'thread_usr_ananya',
+          sender_id: 'usr_ananya',
+          sender_name: 'Ananya Verma',
+          sender_username: 'ananya_v',
+          sender_avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          content: 'Hey! Loved the photos you posted earlier ✨',
+          type: 'text',
+          is_read: true,
+          created_at: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
+        },
+      ],
+      thread_usr_rahul: [
+        {
+          id: 'dm_init_3',
+          thread_id: 'thread_usr_rahul',
+          sender_id: 'usr_rahul',
+          sender_name: 'Rahul Sharma',
+          sender_username: 'rahul_s',
+          sender_avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
+          content: 'Yo! Are we meeting for coffee this Sunday? ☕',
+          type: 'text',
+          is_read: false,
+          created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+        },
+      ],
+    };
+  });
+
+  const [activeThreadId, setActiveThreadId] = useState<string | null>('thread_couple');
+  const [isMessagesOpen, setIsMessagesOpen] = useState(false);
+  const [selectedUserProfileId, setSelectedUserProfileId] = useState<string | null>(null);
+
+  // Sync to local storage
   useEffect(() => {
     try {
       localStorage.setItem(LOCAL_STORAGE_POSTS, JSON.stringify(posts));
@@ -245,7 +428,23 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [friends, pendingSentFriendIds, pendingReceivedFriendIds]);
 
-  // Create a new post
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_DM_MESSAGES, JSON.stringify(dmStore));
+    } catch {
+      // ignore
+    }
+  }, [dmStore]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_NOTIFS, JSON.stringify(notifications));
+    } catch {
+      // ignore
+    }
+  }, [notifications]);
+
+  // Feed Post Actions
   const createPost = (
     content: string,
     mediaUrl?: string | null,
@@ -291,9 +490,12 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     );
   };
 
-  const getComments = useCallback((postId: string): PostComment[] => {
-    return comments[postId] || [];
-  }, [comments]);
+  const getComments = useCallback(
+    (postId: string): PostComment[] => {
+      return comments[postId] || [];
+    },
+    [comments]
+  );
 
   const addComment = (postId: string, content: string) => {
     if (!content.trim()) return;
@@ -332,6 +534,38 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [allUsers]
   );
 
+  const getUserProfileById = useCallback(
+    (userId: string): Profile | null => {
+      if (userId === 'me' || (user && userId === user.id)) {
+        return {
+          id: user?.id || 'me',
+          email: user?.email || 'me@example.com',
+          username: profile?.username || 'me',
+          display_name: profile?.display_name || 'My Name',
+          avatar_url: profile?.avatar_url || null,
+          cover_url: profile?.cover_url || null,
+          bio: profile?.bio || 'Living my best life ✨',
+          posts_count: posts.filter((p) => p.author_id === 'me' || p.author_id === user?.id).length,
+          friends_count: friends.length,
+          relationship_partner_username: partnerProfile?.username || null,
+          relationship_partner_name: partnerProfile?.display_name || null,
+          relationship_role: relationship ? 'girlfriend' : null,
+        };
+      }
+      if (partnerProfile && (userId === partnerProfile.id || userId === 'partner')) {
+        return {
+          ...partnerProfile,
+          relationship_partner_username: profile?.username || 'me',
+          relationship_partner_name: profile?.display_name || 'My Name',
+          relationship_role: partnerProfile.relationship_role || 'girlfriend',
+        };
+      }
+      return allUsers.find((u) => u.id === userId) || null;
+    },
+    [user, profile, partnerProfile, relationship, posts, friends, allUsers]
+  );
+
+  // Friendship Actions
   const sendFriendRequest = (targetUserId: string) => {
     setPendingSentFriendIds((prev) => (prev.includes(targetUserId) ? prev : [...prev, targetUserId]));
   };
@@ -345,6 +579,12 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setPendingReceivedFriendIds((prev) => prev.filter((id) => id !== targetUserId));
   };
 
+  const deleteFriendship = (targetUserId: string) => {
+    setFriends((prev) => prev.filter((id) => id !== targetUserId));
+    setPendingSentFriendIds((prev) => prev.filter((id) => id !== targetUserId));
+    setPendingReceivedFriendIds((prev) => prev.filter((id) => id !== targetUserId));
+  };
+
   const getFriendshipStatus = useCallback(
     (targetUserId: string): 'none' | 'pending_sent' | 'pending_received' | 'friends' => {
       if (friends.includes(targetUserId)) return 'friends';
@@ -355,7 +595,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [friends, pendingSentFriendIds, pendingReceivedFriendIds]
   );
 
-  // 1-Click Code-less Relationship linking
+  // Direct relationship proposal
   const sendDirectRelationshipProposal = async (
     targetUserId: string,
     type: RelationshipType
@@ -363,18 +603,30 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const targetUser = allUsers.find((u) => u.id === targetUserId);
     const partnerDisplayName = targetUser?.display_name || 'Partner';
 
-    // Direct connect: Create space immediately with the targeted user
     await createSpace(type, partnerDisplayName, new Date().toISOString().slice(0, 10));
 
-    // Also automatically make them friends if not already
     if (!friends.includes(targetUserId)) {
       setFriends((prev) => [...prev, targetUserId]);
     }
+
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.6 },
+    });
 
     return {
       success: true,
       message: `You and @${targetUser?.username || 'partner'} are now connected in a ${type} space!`,
     };
+  };
+
+  const openUserProfile = (userId: string) => {
+    setSelectedUserProfileId(userId);
+  };
+
+  const closeUserProfile = () => {
+    setSelectedUserProfileId(null);
   };
 
   const updateMyProfile = (updates: Partial<Profile>) => {
@@ -391,6 +643,180 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [posts, user]
   );
 
+  // Notifications logic
+  const unreadNotificationsCount = useMemo(() => {
+    return notifications.filter((n) => !n.is_read).length;
+  }, [notifications]);
+
+  const markAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  };
+
+  const acceptNotificationRequest = async (notificationId: string) => {
+    const notif = notifications.find((n) => n.id === notificationId);
+    if (!notif) return;
+
+    if (notif.type === 'couple_request') {
+      await sendDirectRelationshipProposal(notif.from_user_id, 'couple');
+    } else if (notif.type === 'friend_request') {
+      acceptFriendRequest(notif.from_user_id);
+      confetti({ particleCount: 50, spread: 60 });
+    }
+
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, is_read: true, request_status: 'accepted' } : n))
+    );
+  };
+
+  const declineNotificationRequest = (notificationId: string) => {
+    const notif = notifications.find((n) => n.id === notificationId);
+    if (!notif) return;
+
+    if (notif.type === 'friend_request') {
+      declineFriendRequest(notif.from_user_id);
+    }
+
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, is_read: true, request_status: 'declined' } : n))
+    );
+  };
+
+  // Direct Threads computation
+  const directThreads = useMemo<DirectChatThread[]>(() => {
+    const list: DirectChatThread[] = [];
+
+    // 1. Partner Couple thread (always top priority if partner or mock partner exists)
+    const partnerInfo: Profile = partnerProfile || {
+      id: 'partner',
+      email: 'partner@4ever.app',
+      username: 'sweetheart',
+      display_name: 'My Love',
+      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+      is_online: true,
+      relationship_role: 'girlfriend',
+      relationship_partner_username: profile?.username || 'me',
+    };
+
+    const coupleMsgs = dmStore['thread_couple'] || [];
+    const lastCoupleMsg = coupleMsgs.length > 0 ? coupleMsgs[coupleMsgs.length - 1] : null;
+
+    list.push({
+      id: 'thread_couple',
+      participant: partnerInfo,
+      is_couple: true,
+      couple_role: (partnerInfo.relationship_role as any) || 'girlfriend',
+      last_message: lastCoupleMsg,
+      unread_count: 0,
+    });
+
+    // 2. Friends threads
+    for (const friendId of friends) {
+      const friendProfile = allUsers.find((u) => u.id === friendId);
+      if (!friendProfile) continue;
+
+      const threadId = `thread_${friendId}`;
+      const msgs = dmStore[threadId] || [];
+      const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+      const unread = msgs.filter((m) => !m.is_read && m.sender_id !== (user?.id || 'me')).length;
+
+      list.push({
+        id: threadId,
+        participant: friendProfile,
+        is_couple: false,
+        couple_role: friendProfile.relationship_role || undefined,
+        last_message: lastMsg,
+        unread_count: unread,
+      });
+    }
+
+    return list;
+  }, [partnerProfile, dmStore, friends, allUsers, profile, user]);
+
+  const getMessagesForThread = useCallback(
+    (threadId: string): DirectChatMessage[] => {
+      return dmStore[threadId] || [];
+    },
+    [dmStore]
+  );
+
+  const sendDirectMessage = (
+    threadId: string,
+    content: string,
+    type: 'text' | 'image' | 'video' | 'audio' | 'location' = 'text',
+    mediaUrl?: string | null,
+    metadata?: DirectChatMessage['metadata']
+  ) => {
+    if (!content.trim() && !mediaUrl && !metadata) return;
+
+    const newMsg: DirectChatMessage = {
+      id: 'dm_msg_' + Date.now(),
+      thread_id: threadId,
+      sender_id: user?.id || 'me',
+      sender_name: profile?.display_name || 'My Name',
+      sender_username: profile?.username || 'me',
+      sender_avatar: profile?.avatar_url || null,
+      content: content.trim(),
+      type,
+      media_url: mediaUrl || null,
+      metadata,
+      is_read: true,
+      created_at: new Date().toISOString(),
+    };
+
+    setDmStore((prev) => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] || []), newMsg],
+    }));
+
+    // Simulate smart partner response in couple thread
+    if (threadId === 'thread_couple') {
+      setTimeout(() => {
+        const responses = [
+          'Aww love you so much! ❤️',
+          'Thinking about you too baby 🥰',
+          'Can’t wait to see you soon! ✨',
+          'Sending you a big warm hug 🤗❤️',
+        ];
+        const randomReply = responses[Math.floor(Math.random() * responses.length)];
+        const replyMsg: DirectChatMessage = {
+          id: 'dm_reply_' + Date.now(),
+          thread_id: 'thread_couple',
+          sender_id: partnerProfile?.id || 'partner',
+          sender_name: partnerProfile?.display_name || 'My Love',
+          sender_username: partnerProfile?.username || 'sweetheart',
+          sender_avatar: partnerProfile?.avatar_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+          content: randomReply,
+          type: 'text',
+          is_read: true,
+          created_at: new Date().toISOString(),
+        };
+        setDmStore((prev) => ({
+          ...prev,
+          thread_couple: [...(prev['thread_couple'] || []), replyMsg],
+        }));
+      }, 1400);
+    }
+  };
+
+  const openDirectChatWithUser = (userId: string) => {
+    if (partnerProfile && (userId === partnerProfile.id || userId === 'partner')) {
+      setActiveThreadId('thread_couple');
+    } else {
+      const threadId = `thread_${userId}`;
+      setActiveThreadId(threadId);
+    }
+    setIsMessagesOpen(true);
+  };
+
+  const unreadMessagesCount = useMemo(() => {
+    let count = 0;
+    Object.keys(dmStore).forEach((threadId) => {
+      const msgs = dmStore[threadId] || [];
+      count += msgs.filter((m) => !m.is_read && m.sender_id !== (user?.id || 'me')).length;
+    });
+    return count;
+  }, [dmStore, user]);
+
   return (
     <SocialContext.Provider
       value={{
@@ -400,18 +826,39 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleLike,
         getComments,
         addComment,
+        userPosts,
         allUsers,
         searchUsers,
+        getUserProfileById,
         friends,
         pendingSentFriendIds,
         pendingReceivedFriendIds,
         sendFriendRequest,
         acceptFriendRequest,
         declineFriendRequest,
+        deleteFriendship,
         getFriendshipStatus,
         sendDirectRelationshipProposal,
+        selectedUserProfileId,
+        openUserProfile,
+        closeUserProfile,
         updateMyProfile,
-        userPosts,
+        directThreads,
+        activeThreadId,
+        setActiveThreadId,
+        getMessagesForThread,
+        sendDirectMessage,
+        openDirectChatWithUser,
+        isMessagesOpen,
+        setIsMessagesOpen,
+        unreadMessagesCount,
+        notifications,
+        unreadNotificationsCount,
+        isNotificationsOpen,
+        setIsNotificationsOpen,
+        markAllNotificationsRead,
+        acceptNotificationRequest,
+        declineNotificationRequest,
       }}
     >
       {children}
