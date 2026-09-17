@@ -11,6 +11,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { RelationshipProvider, useRelationship } from './context/RelationshipContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AppLockProvider } from './context/AppLockContext';
+import { SocialProvider } from './context/SocialContext';
 
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
@@ -19,8 +20,12 @@ import { LocationModal } from './components/LocationModal';
 import { CameraModal } from './components/CameraModal';
 import { RequestsModal } from './components/RequestsModal';
 import { AppLockModal } from './components/AppLockModal';
+import { SpaceHubModal } from './components/SpaceHubModal';
 
 import { HomePage } from './pages/HomePage';
+import { FeedsPage } from './pages/FeedsPage';
+import { SearchPage } from './pages/SearchPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { CalendarPage } from './pages/CalendarPage';
 import { StudyPage } from './pages/StudyPage';
 import { BudgetPage } from './pages/BudgetPage';
@@ -41,9 +46,13 @@ const AppLayout: React.FC = () => {
   const [locationOpen, setLocationOpen] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [requestsOpen, setRequestsOpen] = useState(false);
+  const [hubOpen, setHubOpen] = useState(false);
+
+  // Allow admin and auth routes anytime
+  const isAdminRoute = location.pathname.startsWith('/admin');
 
   // Loading spinner
-  if (authLoading || relLoading) {
+  if ((authLoading || relLoading) && !isAdminRoute) {
     return (
       <div className="min-h-screen bg-[#0c0d11] flex flex-col items-center justify-center space-y-4">
         <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-300 animate-pulse shadow-xl shadow-amber-500/20">
@@ -55,9 +64,6 @@ const AppLayout: React.FC = () => {
       </div>
     );
   }
-
-  // Allow admin and auth routes anytime
-  const isAdminRoute = location.pathname.startsWith('/admin');
 
   // Not logged in -> redirect to auth (unless admin)
   if (!user && location.pathname !== '/auth' && !isAdminRoute) {
@@ -72,22 +78,31 @@ const AppLayout: React.FC = () => {
   const isAuthPage = location.pathname === '/auth';
 
   return (
-    <div className="min-h-screen bg-[#0c0d11] text-white flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
+    <div
+      className={`min-h-screen flex flex-col selection:bg-amber-500/30 selection:text-amber-200 ${
+        isAdminRoute ? 'bg-[#101217]' : 'app-container bg-[#0c0d11] text-white'
+      }`}
+    >
       {/* Couple Passcode Lock Screen (if enabled) */}
-      <AppLockModal />
+      {!isAdminRoute && <AppLockModal />}
 
       {/* Global Navbar */}
-      {!isAuthPage && (
+      {!isAuthPage && !isAdminRoute && (
         <Navbar
           onOpenChat={() => setChatOpen(true)}
           onOpenLocation={() => setLocationOpen(true)}
           onOpenCamera={() => setCameraOpen(true)}
           onOpenRequests={() => setRequestsOpen(true)}
+          onOpenHub={() => setHubOpen(true)}
         />
       )}
 
       {/* Main Content Area */}
-      <main className={`flex-1 ${!isAuthPage ? 'max-w-7xl w-full mx-auto px-4 sm:px-6' : ''}`}>
+      <main
+        className={`flex-1 ${
+          !isAuthPage && !isAdminRoute ? 'max-w-7xl w-full mx-auto px-4 sm:px-6 pb-24 lg:pb-8' : ''
+        }`}
+      >
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -105,6 +120,9 @@ const AppLayout: React.FC = () => {
               />
             }
           />
+          <Route path="/feeds" element={<FeedsPage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/study" element={<StudyPage />} />
           <Route path="/budget" element={<BudgetPage />} />
@@ -116,31 +134,38 @@ const AppLayout: React.FC = () => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      {!isAuthPage && <BottomNav />}
+      {!isAuthPage && !isAdminRoute && <BottomNav onOpenHub={() => setHubOpen(true)} />}
+
+      {/* Global Space Hub Launcher Modal */}
+      <SpaceHubModal isOpen={hubOpen} onClose={() => setHubOpen(false)} />
 
       {/* Global Modals */}
-      <ChatDrawer
-        isOpen={chatOpen}
-        onClose={() => setChatOpen(false)}
-        onOpenCamera={() => {
-          setChatOpen(false);
-          setCameraOpen(true);
-        }}
-        onOpenLocation={() => {
-          setChatOpen(false);
-          setLocationOpen(true);
-        }}
-      />
-      <LocationModal isOpen={locationOpen} onClose={() => setLocationOpen(false)} />
-      <CameraModal
-        isOpen={cameraOpen}
-        onClose={() => setCameraOpen(false)}
-        onPhotoCaptured={() => {
-          setCameraOpen(false);
-          setChatOpen(true);
-        }}
-      />
-      <RequestsModal isOpen={requestsOpen} onClose={() => setRequestsOpen(false)} />
+      {!isAdminRoute && (
+        <>
+          <ChatDrawer
+            isOpen={chatOpen}
+            onClose={() => setChatOpen(false)}
+            onOpenCamera={() => {
+              setChatOpen(false);
+              setCameraOpen(true);
+            }}
+            onOpenLocation={() => {
+              setChatOpen(false);
+              setLocationOpen(true);
+            }}
+          />
+          <LocationModal isOpen={locationOpen} onClose={() => setLocationOpen(false)} />
+          <CameraModal
+            isOpen={cameraOpen}
+            onClose={() => setCameraOpen(false)}
+            onPhotoCaptured={() => {
+              setCameraOpen(false);
+              setChatOpen(true);
+            }}
+          />
+          <RequestsModal isOpen={requestsOpen} onClose={() => setRequestsOpen(false)} />
+        </>
+      )}
     </div>
   );
 };
@@ -151,9 +176,11 @@ export default function App() {
       <AppLockProvider>
         <AuthProvider>
           <RelationshipProvider>
-            <Router>
-              <AppLayout />
-            </Router>
+            <SocialProvider>
+              <Router>
+                <AppLayout />
+              </Router>
+            </SocialProvider>
           </RelationshipProvider>
         </AuthProvider>
       </AppLockProvider>

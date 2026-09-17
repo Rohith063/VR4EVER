@@ -9,7 +9,10 @@ export interface Profile {
   username: string;
   display_name: string;
   avatar_url?: string | null;
+  cover_url?: string | null;
   bio?: string | null;
+  posts_count?: number;
+  friends_count?: number;
   is_online?: boolean;
   last_seen?: string;
   created_at?: string;
@@ -178,4 +181,50 @@ export interface AdminUserRecord {
   is_online: boolean;
   last_seen: string;
   created_at: string;
+}
+
+export interface FeedPost {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_username: string;
+  author_avatar?: string | null;
+  content: string;
+  media_url?: string | null;
+  media_type?: 'image' | 'video' | null;
+  likes_count: number;
+  is_liked_by_me: boolean;
+  comments_count: number;
+  tag?: string | null;
+  created_at: string;
+}
+
+export interface PostComment {
+  id: string;
+  post_id: string;
+  author_id: string;
+  author_name: string;
+  author_username: string;
+  author_avatar?: string | null;
+  content: string;
+  created_at: string;
+}
+
+export interface FriendshipRecord {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  created_at: string;
+}
+
+export interface DirectusAssetRecord {
+  id: string;
+  title: string;
+  filename: string;
+  filesize_kb: number;
+  mime_type: string;
+  uploaded_by: string;
+  uploaded_at: string;
+  url: string;
 }

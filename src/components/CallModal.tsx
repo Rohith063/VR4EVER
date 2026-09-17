@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import {
+  Phone,
   PhoneOff,
   Video,
   VideoOff,
@@ -32,7 +33,7 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, callType 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
-  // Auto-connect after 2 seconds to simulate partner picking up
+  // Start in ringing state
   useEffect(() => {
     if (!isOpen) return;
 
@@ -41,9 +42,10 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, callType 
     setIsMuted(false);
     setIsVideoOff(false);
 
+    // Optional simulated answer after 8 seconds if untouched
     const timer = setTimeout(() => {
-      setCallStatus('connected');
-    }, 2200);
+      setCallStatus((prev) => (prev === 'ringing' ? 'connected' : prev));
+    }, 8000);
 
     return () => clearTimeout(timer);
   }, [isOpen]);
@@ -119,9 +121,17 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, callType 
             </span>
           </div>
 
-          <div className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-mono font-bold text-amber-300">
-            {callStatus === 'ringing' ? 'Ringing...' : formatTime(duration)}
-          </div>
+          {callStatus === 'connected' ? (
+            <div className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-xs font-mono font-bold text-emerald-300 flex items-center gap-1.5 shadow-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span>{formatTime(duration)}</span>
+            </div>
+          ) : (
+            <div className="px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-xs font-semibold text-amber-300 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span>Calling...</span>
+            </div>
+          )}
         </div>
 
         {/* Center content */}
@@ -129,7 +139,7 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, callType 
           {/* Partner Avatar with animated ripples */}
           <div className="relative flex items-center justify-center">
             {callStatus === 'ringing' && (
-              <div className="absolute w-40 h-40 rounded-full bg-amber-500/10 animate-ping pointer-events-none" />
+              <div className="absolute w-44 h-44 rounded-full bg-amber-500/10 animate-ping pointer-events-none" />
             )}
             <div className="w-28 h-28 sm:w-36 sm:h-36 rounded-full bg-gradient-to-tr from-amber-500/30 to-amber-300/10 border-2 border-amber-400/40 flex items-center justify-center text-4xl sm:text-5xl font-serif font-bold text-amber-300 shadow-2xl shadow-amber-500/20">
               {partnerName.slice(0, 2).toUpperCase()}
@@ -140,13 +150,25 @@ export const CallModal: React.FC<CallModalProps> = ({ isOpen, onClose, callType 
             <h2 className="font-serif text-3xl sm:text-4xl font-bold text-white tracking-wide">
               {partnerName}
             </h2>
-            <p className="text-xs sm:text-sm text-white/50 mt-1 capitalize">
+            <p className="text-xs sm:text-sm text-white/60 mt-1 capitalize">
               {callStatus === 'ringing'
-                ? `Calling ${partnerName}...`
+                ? `Ringing ${partnerName}...`
                 : callType === 'video'
-                ? '4EVER HD Video Call'
-                : '4EVER HD Voice Call'}
+                ? `Connected • 4EVER HD Video (${formatTime(duration)})`
+                : `Connected • 4EVER HD Audio (${formatTime(duration)})`}
             </p>
+
+            {/* Answer / Pick Up button during ringing for testing & simulation */}
+            {callStatus === 'ringing' && (
+              <button
+                type="button"
+                onClick={() => setCallStatus('connected')}
+                className="mt-4 px-6 py-2.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-semibold text-xs inline-flex items-center gap-2 shadow-xl shadow-emerald-500/30 active:scale-95 transition-all cursor-pointer"
+              >
+                <Phone className="w-4 h-4 fill-black" />
+                <span>Answer Call (Connect)</span>
+              </button>
+            )}
           </div>
         </div>
 

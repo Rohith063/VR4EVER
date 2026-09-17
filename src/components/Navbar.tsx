@@ -6,18 +6,15 @@ import {
   MapPin,
   MessageCircle,
   Users,
-  Calendar,
-  GraduationCap,
-  Wallet,
-  Image,
-  StickyNote,
+  Search,
+  LayoutGrid,
+  User,
   LogOut,
   Sparkles,
   ChevronDown,
   Sun,
   Moon,
   Settings as SettingsIcon,
-  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useRelationship } from '../context/RelationshipContext';
@@ -29,6 +26,7 @@ interface NavbarProps {
   onOpenLocation: () => void;
   onOpenCamera: () => void;
   onOpenRequests: () => void;
+  onOpenHub?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -36,6 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenLocation,
   onOpenCamera,
   onOpenRequests,
+  onOpenHub,
 }) => {
   const { pathname } = useLocation();
   const { profile, signOut } = useAuth();
@@ -72,11 +71,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navLinks = [
     { name: 'Home', path: '/', icon: Heart },
-    { name: 'Calendar', path: '/calendar', icon: Calendar },
-    { name: 'Study', path: '/study', icon: GraduationCap },
-    { name: 'Budget', path: '/budget', icon: Wallet },
-    { name: 'Memories', path: '/memories', icon: Image },
-    { name: 'Notes', path: '/notes', icon: StickyNote },
+    { name: 'Feeds', path: '/feeds', icon: Sparkles },
+    { name: 'Search', path: '/search', icon: Search },
+    { name: 'Profile', path: '/profile', icon: User },
   ];
 
   return (
@@ -137,6 +134,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               </Link>
             );
           })}
+          {onOpenHub && (
+            <button
+              type="button"
+              onClick={onOpenHub}
+              className="px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5 text-white/60 hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+            >
+              <LayoutGrid className="w-3.5 h-3.5 text-white/40" />
+              <span>Space Hub</span>
+            </button>
+          )}
         </nav>
 
         {/* Right Tools & Partner Status */}
@@ -262,15 +269,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                   >
                     <SettingsIcon className="w-3.5 h-3.5 text-amber-400" />
                     <span>Settings & Privacy Lock</span>
-                  </Link>
-
-                  <Link
-                    to="/admin"
-                    onClick={() => setDropdownOpen(false)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-amber-300 font-medium transition-colors"
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Staff Admin Portal</span>
                   </Link>
 
                   <Link
