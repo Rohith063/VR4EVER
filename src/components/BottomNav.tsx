@@ -7,6 +7,7 @@ import {
   Wallet,
   Image,
   StickyNote,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
@@ -19,6 +20,7 @@ export const BottomNav: React.FC = () => {
     { name: 'Budget', path: '/budget', icon: Wallet },
     { name: 'Memories', path: '/memories', icon: Image },
     { name: 'Notes', path: '/notes', icon: StickyNote },
+    { name: 'Settings', path: '/settings', icon: SettingsIcon },
   ];
 
   return (

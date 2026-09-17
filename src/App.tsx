@@ -9,12 +9,16 @@ import {
 import { Heart } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { RelationshipProvider, useRelationship } from './context/RelationshipContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { AppLockProvider } from './context/AppLockContext';
+
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { ChatDrawer } from './components/ChatDrawer';
 import { LocationModal } from './components/LocationModal';
 import { CameraModal } from './components/CameraModal';
 import { RequestsModal } from './components/RequestsModal';
+import { AppLockModal } from './components/AppLockModal';
 
 import { HomePage } from './pages/HomePage';
 import { CalendarPage } from './pages/CalendarPage';
@@ -24,6 +28,8 @@ import { MemoriesPage } from './pages/MemoriesPage';
 import { NotesPage } from './pages/NotesPage';
 import { AuthPage } from './pages/AuthPage';
 import { OnboardingPage } from './pages/OnboardingPage';
+import { SettingsPage } from './pages/SettingsPage';
+import { AdminDashboardPage } from './pages/AdminDashboardPage';
 
 const AppLayout: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
@@ -50,8 +56,11 @@ const AppLayout: React.FC = () => {
     );
   }
 
-  // Not logged in -> redirect to auth
-  if (!user && location.pathname !== '/auth') {
+  // Allow admin and auth routes anytime
+  const isAdminRoute = location.pathname.startsWith('/admin');
+
+  // Not logged in -> redirect to auth (unless admin)
+  if (!user && location.pathname !== '/auth' && !isAdminRoute) {
     return <Navigate to="/auth" replace />;
   }
 
@@ -60,16 +69,25 @@ const AppLayout: React.FC = () => {
     return <Navigate to={relationship ? '/' : '/onboarding'} replace />;
   }
 
-  // No active relationship and not on onboarding -> redirect to onboarding
-  if (user && !relationship && location.pathname !== '/onboarding') {
+  // No active relationship and not on onboarding, settings, or admin -> redirect to onboarding
+  if (
+    user &&
+    !relationship &&
+    location.pathname !== '/onboarding' &&
+    location.pathname !== '/settings' &&
+    !isAdminRoute
+  ) {
     return <Navigate to="/onboarding" replace />;
   }
 
   const isAuthOrOnboarding =
-    location.pathname === '/auth' || location.pathname === '/onboarding';
+    location.pathname === '/auth' || location.pathname === '/onboarding' || isAdminRoute;
 
   return (
     <div className="min-h-screen bg-[#0c0d11] text-white flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
+      {/* Couple Passcode Lock Screen (if enabled) */}
+      <AppLockModal />
+
       {/* Global Navbar */}
       {!isAuthOrOnboarding && (
         <Navbar
@@ -85,6 +103,8 @@ const AppLayout: React.FC = () => {
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/admin" element={<AdminDashboardPage />} />
 
           <Route
             path="/"
@@ -139,12 +159,16 @@ const AppLayout: React.FC = () => {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RelationshipProvider>
-        <Router>
-          <AppLayout />
-        </Router>
-      </RelationshipProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AppLockProvider>
+        <AuthProvider>
+          <RelationshipProvider>
+            <Router>
+              <AppLayout />
+            </Router>
+          </RelationshipProvider>
+        </AuthProvider>
+      </AppLockProvider>
+    </ThemeProvider>
   );
 }

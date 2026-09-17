@@ -1,7 +1,7 @@
 export type RelationshipType = 'couple' | 'bestfriends' | 'siblings';
 export type RelationshipStatus = 'pending' | 'active' | 'paused' | 'disconnected';
 export type RequestStatus = 'pending' | 'accepted' | 'declined' | 'cancelled';
-export type MessageType = 'text' | 'image' | 'location' | 'audio' | 'system_event';
+export type MessageType = 'text' | 'image' | 'video' | 'audio' | 'file' | 'location' | 'system_event';
 
 export interface Profile {
   id: string;
@@ -55,6 +55,9 @@ export interface Message {
     longitude?: number;
     address?: string;
     duration?: number;
+    fileName?: string;
+    fileSize?: number;
+    fileType?: string;
   } | null;
   is_read: boolean;
   created_at: string;
@@ -144,5 +147,35 @@ export interface StickyNote {
   content: string;
   color: 'golden' | 'rose' | 'sky' | 'mint';
   is_pinned?: boolean;
+  created_at: string;
+}
+
+export interface AppLockConfig {
+  isEnabled: boolean;
+  pin: string;
+  autoLockMinutes: number;
+}
+
+export interface StorageStats {
+  imagesMB: number;
+  videosMB: number;
+  audioMB: number;
+  docsMB: number;
+  totalMB: number;
+  limitMB: number;
+}
+
+export interface AdminUserRecord {
+  id: string;
+  display_name: string;
+  username: string;
+  email: string;
+  role: 'user' | 'staff' | 'admin';
+  relationship_id?: string | null;
+  partner_name?: string | null;
+  storage_used_mb: number;
+  storage_limit_mb: number;
+  is_online: boolean;
+  last_seen: string;
   created_at: string;
 }

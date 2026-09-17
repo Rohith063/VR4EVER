@@ -54,6 +54,31 @@
   }
 }
 
+html.light {
+  --background: 240 20% 98%;
+  --foreground: 240 15% 10%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 15% 10%;
+  --glass-bg: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(0, 0, 0, 0.08);
+}
+
+html.light body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+
+html.light .glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+html.light .glass {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
 .font-display {
   font-family: 'Playfair Display', Georgia, serif;
 }

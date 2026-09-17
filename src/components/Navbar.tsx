@@ -14,9 +14,14 @@ import {
   LogOut,
   Sparkles,
   ChevronDown,
+  Sun,
+  Moon,
+  Settings as SettingsIcon,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useRelationship } from '../context/RelationshipContext';
+import { useTheme } from '../context/ThemeContext';
 import { calculateDistance, calculateRelationshipTime } from '../lib/utils';
 
 interface NavbarProps {
@@ -34,6 +39,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const { pathname } = useLocation();
   const { profile, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const {
     relationship,
     partnerProfile,
@@ -193,6 +199,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </button>
 
+          {/* Light / Dark Mode Toggle */}
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-sky-400" />}
+          </button>
+
+          {/* Settings Link */}
+          <Link
+            to="/settings"
+            title="Settings & Privacy"
+            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white border border-white/10 transition-all active:scale-95 hidden sm:flex"
+          >
+            <SettingsIcon className="w-4 h-4" />
+          </Link>
+
           {/* User Menu Dropdown */}
           <div className="relative">
             <button
@@ -211,7 +235,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   className="fixed inset-0 z-40"
                   onClick={() => setDropdownOpen(false)}
                 />
-                <div className="absolute right-0 mt-2 w-52 rounded-2xl glass-card border border-white/15 shadow-2xl p-2 z-50 space-y-1 text-xs">
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl glass-card border border-white/15 shadow-2xl p-2 z-50 space-y-1 text-xs">
                   <div className="px-3 py-2 border-b border-white/10">
                     <p className="font-semibold text-white truncate">
                       {profile?.display_name || 'Guest User'}
@@ -220,6 +244,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                       @{profile?.username || 'user'}
                     </p>
                   </div>
+
+                  <Link
+                    to="/settings"
+                    onClick={() => setDropdownOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-white/80 transition-colors"
+                  >
+                    <SettingsIcon className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Settings & Privacy Lock</span>
+                  </Link>
+
+                  <Link
+                    to="/admin"
+                    onClick={() => setDropdownOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-amber-300 font-medium transition-colors"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Staff Admin Portal</span>
+                  </Link>
 
                   <Link
                     to="/onboarding"
