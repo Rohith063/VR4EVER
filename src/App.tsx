@@ -33,7 +33,7 @@ import { AdminDashboardPage } from './pages/AdminDashboardPage';
 
 const AppLayout: React.FC = () => {
   const { user, loading: authLoading } = useAuth();
-  const { relationship, loading: relLoading } = useRelationship();
+  const { loading: relLoading } = useRelationship();
   const location = useLocation();
 
   // Modals state
@@ -64,24 +64,12 @@ const AppLayout: React.FC = () => {
     return <Navigate to="/auth" replace />;
   }
 
-  // Logged in but at /auth -> redirect to home or onboarding
+  // Logged in but at /auth -> redirect to home dashboard
   if (user && location.pathname === '/auth') {
-    return <Navigate to={relationship ? '/' : '/onboarding'} replace />;
+    return <Navigate to="/" replace />;
   }
 
-  // No active relationship and not on onboarding, settings, or admin -> redirect to onboarding
-  if (
-    user &&
-    !relationship &&
-    location.pathname !== '/onboarding' &&
-    location.pathname !== '/settings' &&
-    !isAdminRoute
-  ) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
-  const isAuthOrOnboarding =
-    location.pathname === '/auth' || location.pathname === '/onboarding' || isAdminRoute;
+  const isAuthPage = location.pathname === '/auth';
 
   return (
     <div className="min-h-screen bg-[#0c0d11] text-white flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
@@ -89,7 +77,7 @@ const AppLayout: React.FC = () => {
       <AppLockModal />
 
       {/* Global Navbar */}
-      {!isAuthOrOnboarding && (
+      {!isAuthPage && (
         <Navbar
           onOpenChat={() => setChatOpen(true)}
           onOpenLocation={() => setLocationOpen(true)}
@@ -99,7 +87,7 @@ const AppLayout: React.FC = () => {
       )}
 
       {/* Main Content Area */}
-      <main className={`flex-1 ${!isAuthOrOnboarding ? 'max-w-7xl w-full mx-auto px-4 sm:px-6' : ''}`}>
+      <main className={`flex-1 ${!isAuthPage ? 'max-w-7xl w-full mx-auto px-4 sm:px-6' : ''}`}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
@@ -128,7 +116,7 @@ const AppLayout: React.FC = () => {
       </main>
 
       {/* Mobile Bottom Navigation */}
-      {!isAuthOrOnboarding && <BottomNav />}
+      {!isAuthPage && <BottomNav />}
 
       {/* Global Modals */}
       <ChatDrawer

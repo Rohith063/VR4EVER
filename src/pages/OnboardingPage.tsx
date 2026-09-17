@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Home,
   UserCheck,
+  ChevronLeft,
 } from 'lucide-react';
 import { useRelationship } from '../context/RelationshipContext';
 import { useAuth } from '../context/AuthContext';
@@ -112,6 +113,15 @@ export const OnboardingPage: React.FC = () => {
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-lg"
       >
+        {/* Back to App Dashboard */}
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="mb-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-xs font-medium transition-colors cursor-pointer"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span>Back to Dashboard</span>
+        </button>
         {/* If user already has an active space and just visited onboarding */}
         {relationship && !justCreated ? (
           <div className="glass-card rounded-3xl border border-white/10 p-6 sm:p-8 shadow-2xl space-y-6 text-center">
@@ -224,10 +234,10 @@ export const OnboardingPage: React.FC = () => {
                 <Heart className="w-6 h-6 fill-amber-300 text-amber-300" />
               </div>
               <h2 className="font-serif text-2xl sm:text-3xl font-bold bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 bg-clip-text text-transparent">
-                Connect Your Space
+                Build Your Relationship Space
               </h2>
               <p className="text-xs text-white/50">
-                Welcome, {profile?.display_name || 'Friend'}! Set up your space to get started.
+                Welcome, {profile?.display_name || 'Friend'}! Connect with your partner or friend to unlock shared chat, calling, and memories. You can always explore without pairing.
               </p>
             </div>
 
@@ -320,9 +330,9 @@ export const OnboardingPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1.5 flex items-center gap-1">
+                  <label className="block text-xs font-medium text-white/70 mb-1 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Special Date (Anniversary / Since)</span>
+                    <span>Anniversary / Started Dating (Optional)</span>
                   </label>
                   <input
                     type="date"
@@ -330,6 +340,9 @@ export const OnboardingPage: React.FC = () => {
                     onChange={(e) => setStartDate(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-amber-400/50"
                   />
+                  <p className="text-[11px] text-white/40 mt-1">
+                    Optional — defaults to today for your counter. No birth date (DOB) needed!
+                  </p>
                 </div>
 
                 <button

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, UserPlus, Send, Check, Heart, Users, Sparkles, Copy, AlertCircle } from 'lucide-react';
+import { X, UserPlus, Send, Check, Heart, Users, Sparkles, Copy, AlertCircle, KeyRound } from 'lucide-react';
 import { useRelationship } from '../context/RelationshipContext';
 import type { RelationshipType } from '../types';
 
@@ -10,9 +10,18 @@ interface RequestsModalProps {
 }
 
 export const RequestsModal: React.FC<RequestsModalProps> = ({ isOpen, onClose }) => {
-  const { incomingRequests, outgoingRequests, pairCode, sendPairRequest, acceptRequest, declineRequest } = useRelationship();
+  const {
+    incomingRequests,
+    outgoingRequests,
+    pairCode,
+    sendPairRequest,
+    acceptRequest,
+    declineRequest,
+    joinSpaceWithCode,
+  } = useRelationship();
 
-  const [activeTab, setActiveTab] = useState<'incoming' | 'send'>('incoming');
+  const [activeTab, setActiveTab] = useState<'code' | 'send' | 'incoming'>('code');
+  const [pairCodeInput, setPairCodeInput] = useState('');
   const [partnerUsername, setPartnerUsername] = useState('');
   const [relationType, setRelationType] = useState<RelationshipType>('couple');
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
@@ -27,6 +36,32 @@ export const RequestsModal: React.FC<RequestsModalProps> = ({ isOpen, onClose })
     navigator.clipboard.writeText(pairCode);
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleJoinWithCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pairCodeInput.trim().length !== 6) {
+      setErrorMessage('Pair code must be exactly 6 characters');
+      return;
+    }
+    setErrorMessage('');
+    setSuccessMessage('');
+    setSubmitting(true);
+    try {
+      const res = await joinSpaceWithCode(pairCodeInput.trim().toUpperCase());
+      if (res.success) {
+        setSuccessMessage('Successfully paired! Welcome to your shared space.');
+        setTimeout(() => {
+          onClose();
+        }, 1200);
+      } else {
+        setErrorMessage(res.error || 'Failed to connect with this pair code');
+      }
+    } catch (err: unknown) {
+      setErrorMessage((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleSend = async (e: React.FormEvent) => {
@@ -91,22 +126,17 @@ export const RequestsModal: React.FC<RequestsModalProps> = ({ isOpen, onClose })
           <div className="flex border-b border-white/10 bg-white/5 p-1 gap-1">
             <button
               onClick={() => {
-                setActiveTab('incoming');
+                setActiveTab('code');
                 setErrorMessage('');
                 setSuccessMessage('');
               }}
-              className={`flex-1 py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all relative ${
-                activeTab === 'incoming'
+              className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                activeTab === 'code'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              Requests Received
-              {incomingRequests.length > 0 && (
-                <span className="ml-2 px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-bold">
-                  {incomingRequests.length}
-                </span>
-              )}
+              Pair with Code
             </button>
             <button
               onClick={() => {
@@ -114,19 +144,187 @@ export const RequestsModal: React.FC<RequestsModalProps> = ({ isOpen, onClose })
                 setErrorMessage('');
                 setSuccessMessage('');
               }}
-              className={`flex-1 py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+              className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${
                 activeTab === 'send'
                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
                   : 'text-white/60 hover:text-white'
               }`}
             >
-              Send Request
+              By Username
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('incoming');
+                setErrorMessage('');
+                setSuccessMessage('');
+              }}
+              className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all relative ${
+                activeTab === 'incoming'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Requests
+              {incomingRequests.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-rose-500 text-white font-bold">
+                  {incomingRequests.length}
+                </span>
+              )}
             </button>
           </div>
 
           {/* Content Body */}
           <div className="p-6 overflow-y-auto flex-1 space-y-6">
-            {activeTab === 'incoming' ? (
+            {activeTab === 'code' ? (
+              <form onSubmit={handleJoinWithCode} className="space-y-4">
+                {errorMessage && (
+                  <div className="p-3 rounded-lg bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div className="p-3 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{successMessage}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-white/70 mb-1.5">
+                    Enter Partner&apos;s 6-Character Pair Code
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="absolute left-3.5 top-3.5 w-4 h-4 text-white/40" />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={pairCodeInput}
+                      onChange={(e) => setPairCodeInput(e.target.value.toUpperCase())}
+                      placeholder="e.g. 7X9K2P"
+                      required
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 font-mono tracking-widest text-lg font-bold text-center uppercase focus:outline-none focus:border-amber-400/50"
+                    />
+                  </div>
+                  <p className="text-[11px] text-white/40 mt-1.5 text-center">
+                    Ask your partner for their 6-letter invite code from their 4EVER screen or copy yours below.
+                  </p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>{submitting ? 'Connecting...' : 'Connect to Space'}</span>
+                </button>
+              </form>
+            ) : activeTab === 'send' ? (
+              <form onSubmit={handleSend} className="space-y-4">
+                {errorMessage && (
+                  <div className="p-3 rounded-lg bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div className="p-3 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
+                    <Check className="w-4 h-4 shrink-0" />
+                    <span>{successMessage}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-white/70 mb-1.5">
+                    Partner&apos;s Username
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-white/40 text-sm">@</span>
+                    <input
+                      type="text"
+                      value={partnerUsername}
+                      onChange={(e) => setPartnerUsername(e.target.value)}
+                      placeholder="e.g. ananya_24"
+                      className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-amber-400/50"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-white/70 mb-1.5">
+                    Connection Space Type
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(
+                      [
+                        { id: 'couple', label: 'Couple', icon: Heart },
+                        { id: 'bestfriends', label: 'Best Friends', icon: Sparkles },
+                        { id: 'siblings', label: 'Siblings', icon: Users },
+                      ] as const
+                    ).map((item) => {
+                      const Icon = item.icon;
+                      const isSelected = relationType === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setRelationType(item.id)}
+                          className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 text-xs font-medium transition-all ${
+                            isSelected
+                              ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-md'
+                              : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-300' : 'text-white/40'}`} />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-white/70 mb-1 flex items-center gap-1">
+                    <span>Anniversary / Started Dating (Optional)</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-amber-400/50"
+                  />
+                  <p className="text-[11px] text-white/40 mt-1">
+                    Defaults to today. No birth date (DOB) needed!
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-white/70 mb-1.5">
+                    Personal Note (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={customMessage}
+                    onChange={(e) => setCustomMessage(e.target.value)}
+                    placeholder="e.g. Come join our personal 4EVER universe!"
+                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-amber-400/50 resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  {submitting ? 'Sending...' : 'Send Pairing Request'}
+                </button>
+              </form>
+            ) : (
               <div className="space-y-4">
                 {incomingRequests.length === 0 ? (
                   <div className="text-center py-10 space-y-3">
@@ -215,106 +413,6 @@ export const RequestsModal: React.FC<RequestsModalProps> = ({ isOpen, onClose })
                   </div>
                 )}
               </div>
-            ) : (
-              <form onSubmit={handleSend} className="space-y-4">
-                {errorMessage && (
-                  <div className="p-3 rounded-lg bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{errorMessage}</span>
-                  </div>
-                )}
-
-                {successMessage && (
-                  <div className="p-3 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-xs flex items-center gap-2">
-                    <Check className="w-4 h-4 shrink-0" />
-                    <span>{successMessage}</span>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1.5">
-                    Partner&apos;s Username
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2.5 text-white/40 text-sm">@</span>
-                    <input
-                      type="text"
-                      value={partnerUsername}
-                      onChange={(e) => setPartnerUsername(e.target.value)}
-                      placeholder="e.g. ananya_24"
-                      className="w-full pl-8 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-amber-400/50"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1.5">
-                    Connection Space Type
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(
-                      [
-                        { id: 'couple', label: 'Couple', icon: Heart },
-                        { id: 'bestfriends', label: 'Best Friends', icon: Sparkles },
-                        { id: 'siblings', label: 'Siblings', icon: Users },
-                      ] as const
-                    ).map((item) => {
-                      const Icon = item.icon;
-                      const isSelected = relationType === item.id;
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => setRelationType(item.id)}
-                          className={`p-2.5 rounded-xl border flex flex-col items-center gap-1.5 text-xs font-medium transition-all ${
-                            isSelected
-                              ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-md'
-                              : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'
-                          }`}
-                        >
-                          <Icon className={`w-4 h-4 ${isSelected ? 'text-amber-300' : 'text-white/40'}`} />
-                          {item.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1.5">
-                    Anniversary / Since Date
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-amber-400/50"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-white/70 mb-1.5">
-                    Personal Note (Optional)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={customMessage}
-                    onChange={(e) => setCustomMessage(e.target.value)}
-                    placeholder="e.g. Come join our personal 4EVER universe!"
-                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-amber-400/50 resize-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/20 disabled:opacity-50 cursor-pointer"
-                >
-                  <Send className="w-4 h-4" />
-                  {submitting ? 'Sending...' : 'Send Pairing Request'}
-                </button>
-              </form>
             )}
 
             {/* Direct Pair Code Box */}

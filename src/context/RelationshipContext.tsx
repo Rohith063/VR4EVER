@@ -37,6 +37,18 @@ const RelationshipContext = createContext<RelationshipContextType | undefined>(u
 
 const LOCAL_STORAGE_KEY = '4ever_relationship_v1';
 
+const getOrCreatePairCode = (): string => {
+  try {
+    const stored = localStorage.getItem('4ever_my_pair_code');
+    if (stored && stored.length === 6) return stored;
+    const newCode = generatePairCode();
+    localStorage.setItem('4ever_my_pair_code', newCode);
+    return newCode;
+  } catch {
+    return generatePairCode();
+  }
+};
+
 export const RelationshipProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile } = useAuth();
   const [relationship, setRelationship] = useState<Relationship | null>(null);
@@ -46,7 +58,7 @@ export const RelationshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isPartnerOnline, setIsPartnerOnline] = useState<boolean>(false);
   const [incomingRequests, setIncomingRequests] = useState<RelationshipRequest[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<RelationshipRequest[]>([]);
-  const [pairCode, setPairCode] = useState<string>('');
+  const [pairCode, setPairCode] = useState<string>(getOrCreatePairCode);
   const [loading, setLoading] = useState<boolean>(true);
   const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
 
@@ -60,12 +72,14 @@ export const RelationshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const parsed = JSON.parse(stored);
         setRelationship(parsed.relationship);
         setPartnerProfile(parsed.partnerProfile);
-        setPairCode(parsed.pairCode || generatePairCode());
+        setPairCode(parsed.pairCode || getOrCreatePairCode());
         setIsDemoMode(true);
+        return;
       }
     } catch {
       // ignore
     }
+    setPairCode(getOrCreatePairCode());
   }, []);
 
   const saveLocalRelationship = (rel: Relationship | null, partner: Profile | null, code: string) => {
@@ -426,8 +440,14 @@ export const RelationshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
     setRelationship(null);
     setPartnerProfile(null);
-    setPairCode('');
     saveLocalRelationship(null, null, '');
+    const newCode = generatePairCode();
+    try {
+      localStorage.setItem('4ever_my_pair_code', newCode);
+    } catch {
+      // ignore
+    }
+    setPairCode(newCode);
   };
 
   const updateRelationship = async (updates: Partial<Relationship>) => {

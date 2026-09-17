@@ -20,6 +20,7 @@ import {
   ArrowRight,
   Clock,
   Compass,
+  KeyRound,
 } from 'lucide-react';
 import { useRelationship } from '../context/RelationshipContext';
 import { useAuth } from '../context/AuthContext';
@@ -52,6 +53,7 @@ export const HomePage: React.FC<HomePageProps> = ({
     isPartnerOnline,
     partnerLocation,
     myLocation,
+    pairCode,
   } = useRelationship();
 
   const relationType = relationship?.relation_type || 'couple';
@@ -61,6 +63,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   const [quoteIndex, setQuoteIndex] = useState(0);
   const [tipIndex, setTipIndex] = useState(0);
   const [copiedQuote, setCopiedQuote] = useState(false);
+  const [copiedPairCode, setCopiedPairCode] = useState(false);
   const [loveSent, setLoveSent] = useState(false);
 
   // Time calculations
@@ -122,119 +125,200 @@ export const HomePage: React.FC<HomePageProps> = ({
   return (
     <div className="space-y-8 pb-20 pt-4">
       {/* Hero Section */}
-      <motion.section
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-3xl p-6 sm:p-10 border border-white/10 bg-gradient-to-b from-amber-500/10 via-black/40 to-black/60 shadow-2xl"
-      >
-        {/* Ambient Glow */}
-        <div className="absolute top-0 right-1/4 w-80 h-80 bg-amber-500/15 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute -bottom-10 left-10 w-72 h-72 bg-rose-500/10 rounded-full blur-[90px] pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
-          <div className="space-y-4 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold uppercase tracking-wider">
-              <span>{getRelationEmoji(relationType)}</span>
-              <span>{getRelationLabel(relationType)} Space</span>
-            </div>
-
-            <div>
-              <h1 className="font-serif text-4xl sm:text-6xl font-black tracking-tight text-white">
-                <span className="bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 bg-clip-text text-transparent">
-                  {time.totalDays}
-                </span>{' '}
-                <span className="text-white/90 text-3xl sm:text-5xl font-light">
-                  {getDaysCountedTitle(relationType)}
-                </span>
-              </h1>
-              <p className="text-white/60 text-sm sm:text-base mt-2">
-                Since {relationship?.start_date ? new Date(relationship.start_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'today'} • {time.years > 0 ? `${time.years}y ` : ''}{time.months > 0 ? `${time.months}m ` : ''}{time.days}d
-              </p>
-            </div>
-
-            {/* Quick action pill row */}
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 pt-2">
-              <button
-                onClick={handleSendLove}
-                className="px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-lg shadow-rose-950/40"
-              >
-                <Heart className={`w-4 h-4 ${loveSent ? 'fill-rose-400 text-rose-400 scale-125' : 'text-rose-400'}`} />
-                <span>{loveSent ? 'Love Sent! 💖' : 'Send Hug & Love'}</span>
-              </button>
-
-              <button
-                onClick={onOpenChat}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-              >
-                <MessageCircle className="w-4 h-4 text-amber-300" />
-                <span>Open Chat</span>
-              </button>
-
-              <button
-                onClick={onOpenCamera}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
-              >
-                <Camera className="w-4 h-4 text-amber-300" />
-                <span>Take Memory</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Partner Live Card */}
-          <div className="w-full md:w-80 glass-card rounded-2xl border border-white/15 p-5 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <span className="text-xs font-medium text-white/50">Partner Live Status</span>
-              <div className="flex items-center gap-1.5">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isPartnerOnline ? 'bg-emerald-400 animate-pulse' : 'bg-white/30'
-                  }`}
-                />
-                <span className="text-xs text-white/70 font-medium">
-                  {isPartnerOnline ? 'Active Now' : 'Offline'}
-                </span>
+      {!relationship ? (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-3xl p-6 sm:p-10 border border-amber-500/20 bg-gradient-to-b from-amber-500/15 via-black/40 to-black/60 shadow-2xl"
+        >
+          <div className="absolute top-0 right-1/4 w-80 h-80 bg-amber-500/15 rounded-full blur-[100px] pointer-events-none" />
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+            <div className="space-y-4 max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold uppercase tracking-wider">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Welcome to 4EVER</span>
               </div>
-            </div>
 
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/30 to-amber-300/10 border border-amber-500/30 flex items-center justify-center text-amber-300 font-serif text-lg font-bold">
-                {partnerName.slice(0, 2).toUpperCase()}
-              </div>
               <div>
-                <h4 className="text-sm font-semibold text-white truncate">{partnerName}</h4>
-                <p className="text-xs text-white/40">
-                  {profile?.display_name ? `Paired with ${profile.display_name}` : 'Paired Space'}
+                <h1 className="font-serif text-3xl sm:text-5xl font-bold text-white tracking-tight">
+                  Build Your Relationship Space
+                </h1>
+                <p className="text-white/70 text-sm sm:text-base mt-2 leading-relaxed">
+                  Welcome, <span className="text-amber-300 font-semibold">{profile?.display_name || 'Friend'}</span>! Connect with your partner, best friend, or sibling to unlock live chat, video calling, shared calendar, budget splitting, and memories.
                 </p>
               </div>
+
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 pt-2">
+                <Link
+                  to="/onboarding"
+                  className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-xs sm:text-sm flex items-center gap-2 shadow-xl shadow-amber-500/20 active:scale-95 transition-all cursor-pointer"
+                >
+                  <Heart className="w-4 h-4 fill-black" />
+                  <span>Add / Build Relationship</span>
+                </Link>
+
+                <button
+                  type="button"
+                  onClick={onOpenRequests}
+                  className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/15 border border-white/15 text-white font-semibold text-xs sm:text-sm flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
+                >
+                  <KeyRound className="w-4 h-4 text-amber-300" />
+                  <span>Enter Partner&apos;s Code</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+            {/* Quick Share Card */}
+            <div className="w-full md:w-80 glass-card rounded-2xl border border-white/15 p-6 shadow-xl space-y-3 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-300 flex items-center justify-center mx-auto border border-amber-500/30 font-serif font-bold text-xl">
+                4E
+              </div>
+              <h4 className="text-sm font-semibold text-white">Your Pair Invite Code</h4>
+              <p className="text-xs text-white/50">
+                Share this code with your partner to pair instantly:
+              </p>
+              <div className="p-3 rounded-xl bg-black/40 border border-white/10 font-mono text-2xl font-bold tracking-widest text-amber-300 select-all">
+                {pairCode || '4EVR01'}
+              </div>
               <button
-                onClick={onOpenLocation}
-                className="p-2.5 rounded-xl bg-black/30 border border-white/10 flex flex-col gap-1 text-left hover:bg-black/50 transition-colors"
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(pairCode || '4EVR01');
+                  setCopiedPairCode(true);
+                  setTimeout(() => setCopiedPairCode(false), 2000);
+                }}
+                className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
-                <span className="text-[10px] text-white/40 flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-amber-400" /> Distance
-                </span>
-                <span className="font-semibold text-white/90">
-                  {distanceKm !== null ? `${distanceKm.toFixed(1)} km` : 'Share location'}
-                </span>
+                {copiedPairCode ? (
+                  <>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span className="text-emerald-300">Code Copied! Send to Partner</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    <span>Copy Invite Code</span>
+                  </>
+                )}
               </button>
+            </div>
+          </div>
+        </motion.section>
+      ) : (
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden rounded-3xl p-6 sm:p-10 border border-white/10 bg-gradient-to-b from-amber-500/10 via-black/40 to-black/60 shadow-2xl"
+        >
+          {/* Ambient Glow */}
+          <div className="absolute top-0 right-1/4 w-80 h-80 bg-amber-500/15 rounded-full blur-[100px] pointer-events-none" />
+          <div className="absolute -bottom-10 left-10 w-72 h-72 bg-rose-500/10 rounded-full blur-[90px] pointer-events-none" />
 
-              <div className="p-2.5 rounded-xl bg-black/30 border border-white/10 flex flex-col gap-1 text-left">
-                <span className="text-[10px] text-white/40 flex items-center gap-1">
-                  <Battery className="w-3 h-3 text-emerald-400" /> Battery
-                </span>
-                <span className="font-semibold text-white/90">
-                  {partnerLocation?.battery_level !== undefined
-                    ? `${partnerLocation.battery_level}%`
-                    : 'Synced'}
-                </span>
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
+            <div className="space-y-4 max-w-xl">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-300 text-xs font-semibold uppercase tracking-wider">
+                <span>{getRelationEmoji(relationType)}</span>
+                <span>{getRelationLabel(relationType)} Space</span>
+              </div>
+
+              <div>
+                <h1 className="font-serif text-4xl sm:text-6xl font-black tracking-tight text-white">
+                  <span className="bg-gradient-to-r from-amber-200 via-amber-400 to-amber-100 bg-clip-text text-transparent">
+                    {time.totalDays}
+                  </span>{' '}
+                  <span className="text-white/90 text-3xl sm:text-5xl font-light">
+                    {getDaysCountedTitle(relationType)}
+                  </span>
+                </h1>
+                <p className="text-white/60 text-sm sm:text-base mt-2">
+                  Since {relationship?.start_date ? new Date(relationship.start_date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'today'} • {time.years > 0 ? `${time.years}y ` : ''}{time.months > 0 ? `${time.months}m ` : ''}{time.days}d
+                </p>
+              </div>
+
+              {/* Quick action pill row */}
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 pt-2">
+                <button
+                  onClick={handleSendLove}
+                  className="px-4 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-lg shadow-rose-950/40"
+                >
+                  <Heart className={`w-4 h-4 ${loveSent ? 'fill-rose-400 text-rose-400 scale-125' : 'text-rose-400'}`} />
+                  <span>{loveSent ? 'Love Sent! 💖' : 'Send Hug & Love'}</span>
+                </button>
+
+                <button
+                  onClick={onOpenChat}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4 text-amber-300" />
+                  <span>Open Chat</span>
+                </button>
+
+                <button
+                  onClick={onOpenCamera}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-white text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer"
+                >
+                  <Camera className="w-4 h-4 text-amber-300" />
+                  <span>Take Memory</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Partner Live Card */}
+            <div className="w-full md:w-80 glass-card rounded-2xl border border-white/15 p-5 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <span className="text-xs font-medium text-white/50">Partner Live Status</span>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isPartnerOnline ? 'bg-emerald-400 animate-pulse' : 'bg-white/30'
+                    }`}
+                  />
+                  <span className="text-xs text-white/70 font-medium">
+                    {isPartnerOnline ? 'Active Now' : 'Offline'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/30 to-amber-300/10 border border-amber-500/30 flex items-center justify-center text-amber-300 font-serif text-lg font-bold">
+                  {partnerName.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-white truncate">{partnerName}</h4>
+                  <p className="text-xs text-white/40">
+                    {profile?.display_name ? `Paired with ${profile.display_name}` : 'Paired Space'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                <button
+                  onClick={onOpenLocation}
+                  className="p-2.5 rounded-xl bg-black/30 border border-white/10 flex flex-col gap-1 text-left hover:bg-black/50 transition-colors"
+                >
+                  <span className="text-[10px] text-white/40 flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-amber-400" /> Distance
+                  </span>
+                  <span className="font-semibold text-white/90">
+                    {distanceKm !== null ? `${distanceKm.toFixed(1)} km` : 'Share location'}
+                  </span>
+                </button>
+
+                <div className="p-2.5 rounded-xl bg-black/30 border border-white/10 flex flex-col gap-1 text-left">
+                  <span className="text-[10px] text-white/40 flex items-center gap-1">
+                    <Battery className="w-3 h-3 text-emerald-400" /> Battery
+                  </span>
+                  <span className="font-semibold text-white/90">
+                    {partnerLocation?.battery_level !== undefined
+                      ? `${partnerLocation.battery_level}%`
+                      : 'Synced'}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </motion.section>
+        </motion.section>
+      )}
 
       {/* Daily Quote & Tip Section */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
