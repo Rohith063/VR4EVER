@@ -13,14 +13,132 @@ import {
   Search,
   ChevronLeft,
   CheckCheck,
-  StopCircle,
+  Play,
+  Pause,
+  ExternalLink,
 } from 'lucide-react';
 import { useSocial } from '../context/SocialContext';
 import { useAuth } from '../context/AuthContext';
+import { useRelationship } from '../context/RelationshipContext';
 import { CallModal } from './CallModal';
+import { VoiceRecorder } from './VoiceRecorder';
+
+interface AudioMessageBubbleProps {
+  mediaUrl?: string | null;
+  duration?: number;
+  isMe: boolean;
+}
+
+const AudioMessageBubble: React.FC<AudioMessageBubbleProps> = ({ mediaUrl, duration, isMe }) => {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (!mediaUrl) return;
+    const audio = new Audio(mediaUrl);
+    audioRef.current = audio;
+
+    audio.onended = () => {
+      setIsPlaying(false);
+      setProgress(0);
+      setCurrentTime(0);
+    };
+
+    audio.ontimeupdate = () => {
+      if (audio.duration && audio.duration > 0) {
+        setProgress((audio.currentTime / audio.duration) * 100);
+        setCurrentTime(audio.currentTime);
+      }
+    };
+
+    return () => {
+      audio.pause();
+      audioRef.current = null;
+    };
+  }, [mediaUrl]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+      }).catch((err) => {
+        console.warn('Audio play failed', err);
+      });
+    }
+  };
+
+  const formatSecs = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  return (
+    <div className="flex items-center space-x-3 py-1 min-w-[210px] max-w-[270px]">
+      <button
+        type="button"
+        onClick={togglePlay}
+        disabled={!mediaUrl}
+        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all ${
+          isMe
+            ? 'bg-black text-amber-400 hover:bg-black/80'
+            : 'bg-amber-500 text-black hover:bg-amber-400'
+        } ${!mediaUrl ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-95 shadow-md'}`}
+        title={isPlaying ? 'Pause' : 'Play voice note'}
+      >
+        {isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
+      </button>
+
+      <div className="flex-1 space-y-1.5 overflow-hidden">
+        {/* Interactive waveform bars */}
+        <div
+          className="flex items-center gap-1 h-5 cursor-pointer"
+          onClick={(e) => {
+            if (!audioRef.current || !audioRef.current.duration) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            audioRef.current.currentTime = pos * audioRef.current.duration;
+          }}
+          title="Click to seek"
+        >
+          {[6, 12, 20, 14, 10, 18, 22, 16, 8, 14, 20, 12, 16, 10, 6].map((barHeight, idx) => {
+            const barFraction = (idx + 1) / 15;
+            const isFilled = (progress / 100) >= barFraction;
+            return (
+              <div
+                key={idx}
+                className={`w-1 rounded-full transition-all duration-150 ${
+                  isMe
+                    ? isFilled ? 'bg-black' : 'bg-black/30'
+                    : isFilled ? 'bg-amber-400' : 'bg-white/30'
+                } ${isPlaying ? 'animate-pulse' : ''}`}
+                style={{
+                  height: `${barHeight}px`,
+                  animationDelay: `${idx * 80}ms`,
+                }}
+              />
+            );
+          })}
+        </div>
+
+        <div className={`flex justify-between text-[10px] font-mono ${isMe ? 'text-black/70' : 'text-white/60'}`}>
+          <span>{isPlaying ? formatSecs(currentTime) : 'Voice note'}</span>
+          <span>{duration ? `${duration}s` : (mediaUrl ? 'Voice note' : 'No audio')}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const DirectMessagesModal: React.FC = () => {
   const { user } = useAuth();
+  const { updateLocation } = useRelationship();
   const {
     isMessagesOpen,
     setIsMessagesOpen,
@@ -35,7 +153,6 @@ export const DirectMessagesModal: React.FC = () => {
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [callModalOpen, setCallModalOpen] = useState(false);
   const [callType, setCallType] = useState<'video' | 'audio'>('audio');
@@ -53,19 +170,6 @@ export const DirectMessagesModal: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeMessages.length, activeThreadId]);
 
-  // Voice recording timer
-  useEffect(() => {
-    let interval: any;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingDuration((prev) => prev + 1);
-      }, 1000);
-    } else {
-      setRecordingDuration(0);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
-
   if (!isMessagesOpen) return null;
 
   const handleSend = () => {
@@ -77,48 +181,43 @@ export const DirectMessagesModal: React.FC = () => {
 
   const handleSendLocation = () => {
     if (!currentThread) return;
-    if (navigator.geolocation) {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          sendDirectMessage(currentThread.id, '📍 Shared Current Location', 'location', null, {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            address: 'Real-time GPS Coordinate Pin',
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          if (currentThread.is_couple) {
+            updateLocation(lat, lng, 10);
+          }
+          sendDirectMessage(currentThread.id, '📍 Live GPS Location', 'location', null, {
+            latitude: lat,
+            longitude: lng,
+            address: `${lat.toFixed(4)}, ${lng.toFixed(4)} (Real-time GPS)`,
           });
         },
-        () => {
-          // Fallback simulation coordinates
-          sendDirectMessage(currentThread.id, '📍 Shared Live Location Pin', 'location', null, {
-            latitude: 12.9716,
-            longitude: 77.5946,
-            address: 'MG Road, Bangalore • Live Now',
+        (err) => {
+          console.warn('Geolocation unavailable or denied:', err);
+          const lat = 12.9716;
+          const lng = 77.5946;
+          if (currentThread.is_couple) {
+            updateLocation(lat, lng, 50);
+          }
+          sendDirectMessage(currentThread.id, '📍 Shared Location Pin', 'location', null, {
+            latitude: lat,
+            longitude: lng,
+            address: 'MG Road, Bangalore • Live Radar',
           });
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
       );
     } else {
-      sendDirectMessage(currentThread.id, '📍 Shared Live Location Pin', 'location', null, {
-        latitude: 12.9716,
-        longitude: 77.5946,
-        address: 'MG Road, Bangalore • Live Now',
+      const lat = 12.9716;
+      const lng = 77.5946;
+      sendDirectMessage(currentThread.id, '📍 Shared Location Pin', 'location', null, {
+        latitude: lat,
+        longitude: lng,
+        address: 'MG Road, Bangalore • Live Radar',
       });
-    }
-  };
-
-  const handleVoiceRecordToggle = () => {
-    if (isRecording) {
-      // Finish recording and send
-      setIsRecording(false);
-      if (currentThread) {
-        sendDirectMessage(
-          currentThread.id,
-          `Voice Note (${recordingDuration || 3}s)`,
-          'audio',
-          null,
-          { audio_duration: recordingDuration || 3 }
-        );
-      }
-    } else {
-      setIsRecording(true);
     }
   };
 
@@ -447,36 +546,55 @@ export const DirectMessagesModal: React.FC = () => {
 
                           {/* Audio Voice Note Bubble */}
                           {msg.type === 'audio' && (
-                            <div className="flex items-center space-x-2 py-1">
-                              <div className="w-8 h-8 rounded-full bg-black/20 flex items-center justify-center">
-                                <Mic className="w-4 h-4" />
-                              </div>
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-[11px]">{msg.content}</span>
-                                <div className="w-24 h-1.5 bg-black/20 rounded-full mt-1 overflow-hidden">
-                                  <div className="w-1/2 h-full bg-current rounded-full" />
-                                </div>
-                              </div>
-                            </div>
+                            <AudioMessageBubble
+                              mediaUrl={msg.media_url}
+                              duration={msg.metadata?.audio_duration}
+                              isMe={isMe}
+                            />
                           )}
 
                           {/* Live Location Bubble */}
                           {msg.type === 'location' && (
-                            <div className="space-y-1.5 py-1">
-                              <div className="flex items-center space-x-1.5 font-semibold">
-                                <MapPin className="w-4 h-4 text-rose-500" />
-                                <span>{msg.content}</span>
-                              </div>
-                              {msg.metadata?.address && (
-                                <p className="text-[10px] opacity-80">{msg.metadata.address}</p>
-                              )}
-                              <div className="w-full h-20 rounded-xl bg-black/20 border border-white/10 flex items-center justify-center relative overflow-hidden">
-                                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:8px_8px]" />
-                                <div className="relative flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-black/40 text-[10px] font-mono">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                                  <span>Live Coordinate Radar Active</span>
+                            <div className="space-y-2 py-1 max-w-[260px]">
+                              <div className="flex items-center space-x-2 font-semibold">
+                                <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${isMe ? 'bg-black/20 text-black' : 'bg-rose-500/20 text-rose-400'}`}>
+                                  <MapPin className="w-4 h-4 text-rose-500" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-semibold truncate">{msg.content || '📍 Live Location'}</p>
+                                  {msg.metadata?.address && (
+                                    <p className={`text-[10px] truncate ${isMe ? 'text-black/70' : 'text-white/60'}`}>{msg.metadata.address}</p>
+                                  )}
                                 </div>
                               </div>
+
+                              {msg.metadata?.latitude && msg.metadata?.longitude ? (
+                                <div className="rounded-xl overflow-hidden border border-black/10 bg-black/30 p-2.5 space-y-2 text-white">
+                                  <div className="flex items-center justify-between text-[10px] font-mono text-emerald-400">
+                                    <span className="flex items-center gap-1.5">
+                                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                                      Live GPS Coordinates
+                                    </span>
+                                    <span>{Number(msg.metadata.latitude).toFixed(3)}°, {Number(msg.metadata.longitude).toFixed(3)}°</span>
+                                  </div>
+                                  <a
+                                    href={`https://www.google.com/maps?q=${msg.metadata.latitude},${msg.metadata.longitude}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-center gap-1.5 w-full py-1.5 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-[11px] font-medium text-white transition-colors cursor-pointer"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5 text-amber-300" />
+                                    <span>Open in Google Maps</span>
+                                  </a>
+                                </div>
+                              ) : (
+                                <div className="w-full h-14 rounded-xl bg-black/20 border border-white/10 flex items-center justify-center relative overflow-hidden">
+                                  <div className="flex items-center space-x-1.5 px-3 py-1 rounded-lg bg-black/40 text-[10px] font-mono">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                                    <span>Live Coordinate Pin</span>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           )}
 
@@ -522,68 +640,72 @@ export const DirectMessagesModal: React.FC = () => {
 
                 {/* Input Controls Bar */}
                 <div className="p-3 border-t border-white/10 bg-[#14161f]/80 backdrop-blur-md">
-                  <div className="flex items-center space-x-2">
-                    {/* Emoji toggle */}
-                    <button
-                      type="button"
-                      onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                      className="p-2 rounded-xl text-white/60 hover:text-amber-300 hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <Smile className="w-5 h-5" />
-                    </button>
-
-                    {/* Image / Attachment */}
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-2 rounded-xl text-white/60 hover:text-amber-300 hover:bg-white/5 transition-colors cursor-pointer"
-                      title="Attach Photo / Video"
-                    >
-                      <ImageIcon className="w-5 h-5" />
-                    </button>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      accept="image/*,video/*"
-                      className="hidden"
+                  {isRecording ? (
+                    <VoiceRecorder
+                      onAudioRecorded={(audioDataUrl, dur) => {
+                        setIsRecording(false);
+                        if (currentThread) {
+                          sendDirectMessage(
+                            currentThread.id,
+                            `Voice Note (${dur}s)`,
+                            'audio',
+                            audioDataUrl,
+                            { audio_duration: dur }
+                          );
+                        }
+                      }}
+                      onCancel={() => setIsRecording(false)}
                     />
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      {/* Emoji toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                        className="p-2 rounded-xl text-white/60 hover:text-amber-300 hover:bg-white/5 transition-colors cursor-pointer"
+                      >
+                        <Smile className="w-5 h-5" />
+                      </button>
 
-                    {/* Live Location Sharing button */}
-                    <button
-                      type="button"
-                      onClick={handleSendLocation}
-                      className="p-2 rounded-xl text-white/60 hover:text-rose-400 hover:bg-white/5 transition-colors cursor-pointer"
-                      title="Share Live Location in Chat"
-                    >
-                      <MapPin className="w-5 h-5" />
-                    </button>
+                      {/* Image / Attachment */}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-2 rounded-xl text-white/60 hover:text-amber-300 hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Attach Photo / Video"
+                      >
+                        <ImageIcon className="w-5 h-5" />
+                      </button>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        accept="image/*,video/*"
+                        className="hidden"
+                      />
 
-                    {/* Voice Note Button */}
-                    <button
-                      type="button"
-                      onClick={handleVoiceRecordToggle}
-                      className={`p-2 rounded-xl transition-all cursor-pointer ${
-                        isRecording
-                          ? 'bg-rose-500 text-white animate-pulse'
-                          : 'text-white/60 hover:text-amber-300 hover:bg-white/5'
-                      }`}
-                      title="Record Voice Note"
-                    >
-                      {isRecording ? <StopCircle className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                    </button>
+                      {/* Live Location Sharing button */}
+                      <button
+                        type="button"
+                        onClick={handleSendLocation}
+                        className="p-2 rounded-xl text-white/60 hover:text-rose-400 hover:bg-white/5 transition-colors cursor-pointer"
+                        title="Share Live Location in Chat"
+                      >
+                        <MapPin className="w-5 h-5" />
+                      </button>
 
-                    {/* Text Input */}
-                    <div className="flex-1 relative">
-                      {isRecording ? (
-                        <div className="w-full py-2 px-3 rounded-xl bg-rose-500/20 border border-rose-500/40 text-xs text-rose-300 flex items-center justify-between">
-                          <span className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-                            Recording voice note... {recordingDuration}s
-                          </span>
-                          <span className="font-mono text-[10px]">Tap mic to finish</span>
-                        </div>
-                      ) : (
+                      {/* Voice Note Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsRecording(true)}
+                        className="p-2 rounded-xl text-white/60 hover:text-amber-300 hover:bg-white/5 transition-all cursor-pointer"
+                        title="Record Voice Note"
+                      >
+                        <Mic className="w-5 h-5" />
+                      </button>
+
+                      {/* Text Input */}
+                      <div className="flex-1 relative">
                         <input
                           type="text"
                           placeholder="Message..."
@@ -597,11 +719,9 @@ export const DirectMessagesModal: React.FC = () => {
                           }}
                           className="w-full px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400/50"
                         />
-                      )}
-                    </div>
+                      </div>
 
-                    {/* Send Button */}
-                    {!isRecording && (
+                      {/* Send Button */}
                       <button
                         type="button"
                         onClick={handleSend}
@@ -610,8 +730,8 @@ export const DirectMessagesModal: React.FC = () => {
                       >
                         <Send className="w-4 h-4" />
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

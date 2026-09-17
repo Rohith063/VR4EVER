@@ -395,8 +395,37 @@ export const AdminDashboardPage: React.FC = () => {
       const mergedUsers = Array.from(usersMap.values()).filter(
         (u) => !isPurged(u.id, u.email, u.username)
       );
-      setUsers(mergedUsers);
-      localStorage.setItem(CMS_USERS_CACHE_KEY, JSON.stringify(mergedUsers));
+
+      // Strict deduplication by ID, Email, and Username
+      const dedupedUsers: AdminUserRecord[] = [];
+      const seenIds = new Set<string>();
+      const seenEmails = new Set<string>();
+      const seenUsernames = new Set<string>();
+
+      for (const u of mergedUsers) {
+        if (!u || !u.id) continue;
+        if (isPurged(u.id, u.email, u.username)) continue;
+        if (seenIds.has(u.id)) continue;
+
+        const emailNorm =
+          u.email &&
+          u.email !== 'No email provided' &&
+          u.email !== 'Authenticated User'
+            ? u.email.toLowerCase().trim()
+            : null;
+        const unameNorm = u.username ? u.username.toLowerCase().trim() : null;
+
+        if (emailNorm && seenEmails.has(emailNorm)) continue;
+        if (unameNorm && seenUsernames.has(unameNorm)) continue;
+
+        seenIds.add(u.id);
+        if (emailNorm) seenEmails.add(emailNorm);
+        if (unameNorm) seenUsernames.add(unameNorm);
+        dedupedUsers.push(u);
+      }
+
+      setUsers(dedupedUsers);
+      localStorage.setItem(CMS_USERS_CACHE_KEY, JSON.stringify(dedupedUsers));
 
       // 2. Fetch live Relationships
       const { data: relsData, error: relsError } = await supabase

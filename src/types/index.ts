@@ -293,5 +293,6 @@ export interface AppNotification {
   created_at: string;
   is_read: boolean;
   request_status?: 'pending' | 'accepted' | 'declined';
+  request_id?: string;
 }
 

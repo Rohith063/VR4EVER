@@ -95,7 +95,12 @@ const LOCAL_STORAGE_NOTIFS = '4ever_real_notifs_v4';
 
 export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile, updateProfile } = useAuth();
-  const { relationship, partnerProfile, createSpace } = useRelationship();
+  const {
+    relationship,
+    partnerProfile,
+    sendPairRequest,
+    acceptRequest: acceptPairRequest,
+  } = useRelationship();
 
   // Posts state (Start with clean empty array)
   const [posts, setPosts] = useState<FeedPost[]>(() => {
@@ -272,14 +277,28 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           if (tombList.includes(incoming.id) || (incoming.email && tombList.includes(incoming.email.toLowerCase()))) {
             return;
           }
-          if (incoming.id !== user?.id) {
-            setAllUsers((prev) => {
-              if (prev.some((u) => u.id === incoming.id)) {
-                return prev.map((u) => (u.id === incoming.id ? { ...u, ...incoming } : u));
-              }
-              return [...prev, incoming];
-            });
+          const myId = user?.id || profile?.id;
+          const myUname = profile?.username?.toLowerCase();
+          if (incoming.id === myId || (myUname && incoming.username?.toLowerCase() === myUname)) {
+            return; // Never add self to allUsers
           }
+
+          setAllUsers((prev) => {
+            const incomingUname = incoming.username?.toLowerCase();
+            const incomingEmail = incoming.email?.toLowerCase();
+            const existsIndex = prev.findIndex(
+              (u) =>
+                u.id === incoming.id ||
+                (incomingUname && u.username?.toLowerCase() === incomingUname) ||
+                (incomingEmail && u.email && u.email.toLowerCase() === incomingEmail)
+            );
+            if (existsIndex >= 0) {
+              const updated = [...prev];
+              updated[existsIndex] = { ...updated[existsIndex], ...incoming };
+              return updated;
+            }
+            return [...prev, incoming];
+          });
         }
 
         // 2. Someone requested presence announcements
@@ -328,7 +347,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setFriends((prev) => (prev.includes(sender.id) ? prev : [...prev, sender.id]));
         }
 
-        // 6. Relationship proposal received
+        // 6. Couple request received
         if (payload.type === 'couple_request' && payload.targetUserId === (user?.id || profile?.id)) {
           const sender: Profile = payload.sender;
           const newNotif: AppNotification = {
@@ -346,14 +365,58 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setNotifications((prev) => [newNotif, ...prev]);
         }
 
+        // 6b. Couple request accepted by partner!
+        if (payload.type === 'couple_accepted' && payload.targetUserId === (user?.id || profile?.id)) {
+          const partner: Profile = payload.partnerProfile || payload.sender;
+          if (partner) {
+            const newNotif: AppNotification = {
+              id: 'notif_ca_' + Date.now(),
+              type: 'couple_request',
+              from_user_id: partner.id,
+              from_user_name: partner.display_name,
+              from_user_username: partner.username,
+              from_user_avatar: partner.avatar_url,
+              content: `accepted your couple request! You are now connected ❤️`,
+              created_at: new Date().toISOString(),
+              is_read: false,
+              request_status: 'accepted',
+            };
+            setNotifications((prev) => [newNotif, ...prev]);
+            confetti({ particleCount: 90, spread: 70, origin: { y: 0.6 } });
+          }
+        }
+
         // 7. Direct chat message received
-        if (payload.type === 'dm_message' && payload.targetUserId === (user?.id || profile?.id)) {
-          const msg: DirectChatMessage = payload.message;
-          const threadId = payload.isCouple ? 'thread_couple' : `thread_${msg.sender_id}`;
-          setDmStore((prev) => ({
-            ...prev,
-            [threadId]: [...(prev[threadId] || []), msg],
-          }));
+        if (payload.type === 'dm_message') {
+          const myId = user?.id || profile?.id;
+          if (myId && payload.targetUserId === myId) {
+            const msg: DirectChatMessage = payload.message;
+            const incomingMsg: DirectChatMessage = {
+              ...msg,
+              is_read: false,
+            };
+            const senderId = payload.senderId || msg.sender_id;
+            const threadId = payload.isCouple ? 'thread_couple' : `thread_${senderId}`;
+
+            setDmStore((prev) => ({
+              ...prev,
+              [threadId]: [...(prev[threadId] || []), incomingMsg],
+            }));
+
+            // Message arrival audio chime
+            try {
+              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const osc = audioCtx.createOscillator();
+              const gain = audioCtx.createGain();
+              osc.connect(gain);
+              gain.connect(audioCtx.destination);
+              osc.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+              gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+              osc.start();
+              osc.stop(audioCtx.currentTime + 0.15);
+            } catch {}
+          }
         }
       })
       .subscribe((status) => {
@@ -567,44 +630,28 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [friends, pendingSentFriendIds, pendingReceivedFriendIds]
   );
 
-  // 1-Click Code-less Relationship linking
+  // 1-Click Couple Request Linking
   const sendDirectRelationshipProposal = async (
     targetUserId: string,
     type: RelationshipType
   ): Promise<{ success: boolean; message: string }> => {
     const targetUser = allUsers.find((u) => u.id === targetUserId);
-    const partnerDisplayName = targetUser?.display_name || 'Partner';
-
-    await createSpace(type, partnerDisplayName, new Date().toISOString().slice(0, 10));
-
-    if (!friends.includes(targetUserId)) {
-      setFriends((prev) => [...prev, targetUserId]);
+    if (!targetUser) {
+      return { success: false, message: 'Target user not found' };
     }
 
-    // Broadcast couple proposal
-    if (profile) {
-      realtimeChannelRef.current?.send({
-        type: 'broadcast',
-        event: 'social_event',
-        payload: {
-          type: 'couple_request',
-          sender: profile,
-          targetUserId,
-          relationType: type,
-        },
-      });
+    const res = await sendPairRequest(targetUser.id, type);
+    if (res.success) {
+      return {
+        success: true,
+        message: `Couple request sent to @${targetUser.username}! Waiting for them to accept ❤️`,
+      };
+    } else {
+      return {
+        success: false,
+        message: res.error || 'Failed to send couple request',
+      };
     }
-
-    confetti({
-      particleCount: 80,
-      spread: 70,
-      origin: { y: 0.6 },
-    });
-
-    return {
-      success: true,
-      message: `You and @${targetUser?.username || 'partner'} are now connected in a ${type} space!`,
-    };
   };
 
   const openUserProfile = (userId: string) => {
@@ -651,7 +698,8 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!notif) return;
 
     if (notif.type === 'couple_request') {
-      await sendDirectRelationshipProposal(notif.from_user_id, 'couple');
+      await acceptPairRequest(notif.request_id || notif.id);
+      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
     } else if (notif.type === 'friend_request') {
       acceptFriendRequest(notif.from_user_id);
       confetti({ particleCount: 50, spread: 60 });
@@ -675,12 +723,20 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     );
   };
 
-  // Direct Threads computation (ONLY REAL USERS - NO BOTS)
+  // Direct Threads computation (ONLY REAL USERS - NO BOTS - ZERO DUPLICATES)
   const directThreads = useMemo<DirectChatThread[]>(() => {
     const list: DirectChatThread[] = [];
+    const seenUserIds = new Set<string>();
+
+    const myId = user?.id || profile?.id;
+    const myUname = profile?.username?.toLowerCase();
 
     // 1. Partner Couple thread (ONLY IF IN AN ACTIVE RELATIONSHIP OR PARTNER PROFILE EXISTS)
-    if (relationship && partnerProfile) {
+    if (relationship && partnerProfile && partnerProfile.id) {
+      seenUserIds.add(partnerProfile.id);
+      if (partnerProfile.username) seenUserIds.add(partnerProfile.username.toLowerCase());
+      if (partnerProfile.email) seenUserIds.add(partnerProfile.email.toLowerCase());
+
       const coupleMsgs = dmStore['thread_couple'] || [];
       const lastCoupleMsg = coupleMsgs.length > 0 ? coupleMsgs[coupleMsgs.length - 1] : null;
 
@@ -694,15 +750,29 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
     }
 
-    // 2. Real Friends threads
-    for (const friendId of friends) {
-      const friendProfile = allUsers.find((u) => u.id === friendId);
+    // 2. Real Friends threads (Deduplicated, strictly omitting the partner and self!)
+    const uniqueFriends = Array.from(new Set(friends));
+    for (const friendId of uniqueFriends) {
+      if (seenUserIds.has(friendId)) continue;
+      if (myId && friendId === myId) continue;
+
+      const friendProfile = allUsers.find(
+        (u) => u.id === friendId || (u.username && u.username.toLowerCase() === friendId.toLowerCase())
+      );
       if (!friendProfile) continue;
 
-      const threadId = `thread_${friendId}`;
+      if (myId && friendProfile.id === myId) continue;
+      if (myUname && friendProfile.username?.toLowerCase() === myUname) continue;
+      if (seenUserIds.has(friendProfile.id)) continue;
+      if (friendProfile.username && seenUserIds.has(friendProfile.username.toLowerCase())) continue;
+
+      seenUserIds.add(friendProfile.id);
+      if (friendProfile.username) seenUserIds.add(friendProfile.username.toLowerCase());
+
+      const threadId = `thread_${friendProfile.id}`;
       const msgs = dmStore[threadId] || [];
       const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-      const unread = msgs.filter((m) => !m.is_read && m.sender_id !== (user?.id || 'me')).length;
+      const unread = msgs.filter((m) => !m.is_read && m.sender_id !== (user?.id || profile?.id || 'me')).length;
 
       list.push({
         id: threadId,
@@ -715,7 +785,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     return list;
-  }, [relationship, partnerProfile, dmStore, friends, allUsers, user]);
+  }, [relationship, partnerProfile, dmStore, friends, allUsers, user, profile]);
 
   const getMessagesForThread = useCallback(
     (threadId: string): DirectChatMessage[] => {
@@ -733,13 +803,18 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   ) => {
     if (!content.trim() && !mediaUrl && !metadata) return;
 
+    const myId = user?.id || profile?.id || 'usr_me';
+    const myName = profile?.display_name || 'User';
+    const myUsername = profile?.username || 'user';
+    const myAvatar = profile?.avatar_url || null;
+
     const newMsg: DirectChatMessage = {
       id: 'dm_msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       thread_id: threadId,
-      sender_id: user?.id || 'me',
-      sender_name: profile?.display_name || 'My Name',
-      sender_username: profile?.username || 'me',
-      sender_avatar: profile?.avatar_url || null,
+      sender_id: myId,
+      sender_name: myName,
+      sender_username: myUsername,
+      sender_avatar: myAvatar,
       content: content.trim(),
       type,
       media_url: mediaUrl || null,
@@ -753,7 +828,7 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       [threadId]: [...(prev[threadId] || []), newMsg],
     }));
 
-    // Broadcast message to the real recipient over Supabase Realtime (NO BOTS!)
+    // Broadcast message to the real recipient over Supabase Realtime
     let targetUserId: string | null = null;
     let isCouple = false;
 
@@ -772,9 +847,26 @@ export const SocialProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           type: 'dm_message',
           message: newMsg,
           targetUserId,
+          senderId: myId,
           isCouple,
         },
       });
+    }
+
+    // Also persist couple messages to Supabase messages table if active relationship exists
+    if (threadId === 'thread_couple' && relationship?.id) {
+      try {
+        supabase.from('messages').insert([{
+          id: newMsg.id,
+          relationship_id: relationship.id,
+          sender_id: myId,
+          type: type === 'location' ? 'location' : type === 'audio' ? 'voice' : type,
+          content: newMsg.content,
+          media_url: newMsg.media_url,
+          metadata: newMsg.metadata,
+          created_at: newMsg.created_at,
+        }]).then();
+      } catch {}
     }
   };
 
