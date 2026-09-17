@@ -172,17 +172,36 @@ export interface StorageStats {
   limitMB: number;
 }
 
+export type StaffRole = 'super_admin' | 'operations' | 'moderator' | 'support';
+
+export interface StaffMemberRecord {
+  id: string;
+  name: string;
+  email: string;
+  password?: string;
+  role: StaffRole;
+  avatar?: string | null;
+  permissions: string[];
+  status: 'active' | 'suspended';
+  created_at: string;
+  last_login?: string;
+}
+
 export interface AdminUserRecord {
   id: string;
   display_name: string;
   username: string;
   email: string;
+  avatar_url?: string | null;
+  cover_url?: string | null;
+  bio?: string | null;
   role: 'user' | 'staff' | 'admin';
   relationship_id?: string | null;
   partner_name?: string | null;
   storage_used_mb: number;
   storage_limit_mb: number;
   is_online: boolean;
+  is_banned?: boolean;
   last_seen: string;
   created_at: string;
 }

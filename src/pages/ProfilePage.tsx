@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -12,11 +12,13 @@ import {
   Check,
   Camera,
   LogOut,
+  Upload,
+  Trash2,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useRelationship } from '../context/RelationshipContext';
 import { useSocial } from '../context/SocialContext';
-import { calculateRelationshipTime } from '../lib/utils';
+import { calculateRelationshipTime, resizeAndCompressImage } from '../lib/utils';
 
 export const ProfilePage: React.FC = () => {
   const { profile, signOut } = useAuth();
@@ -33,6 +35,58 @@ export const ProfilePage: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
   const [coverUrl, setCoverUrl] = useState(profile?.cover_url || '');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // File input refs for uploading images directly from device
+  const bannerFileInputRef = useRef<HTMLInputElement>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const modalAvatarInputRef = useRef<HTMLInputElement>(null);
+  const modalCoverInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDirectBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await resizeAndCompressImage(file, 1400, 600, 0.85);
+      setCoverUrl(compressed);
+      updateMyProfile({ cover_url: compressed });
+    } catch (err) {
+      console.error('Failed to process banner image', err);
+    }
+  };
+
+  const handleDirectAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await resizeAndCompressImage(file, 600, 600, 0.85);
+      setAvatarUrl(compressed);
+      updateMyProfile({ avatar_url: compressed });
+    } catch (err) {
+      console.error('Failed to process avatar image', err);
+    }
+  };
+
+  const handleModalAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await resizeAndCompressImage(file, 600, 600, 0.85);
+      setAvatarUrl(compressed);
+    } catch (err) {
+      console.error('Failed to process avatar image', err);
+    }
+  };
+
+  const handleModalCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await resizeAndCompressImage(file, 1400, 600, 0.85);
+      setCoverUrl(compressed);
+    } catch (err) {
+      console.error('Failed to process banner image', err);
+    }
+  };
 
   const myPosts = userPosts('me');
 
@@ -64,7 +118,7 @@ export const ProfilePage: React.FC = () => {
       {/* Profile Header Banner & Avatar (Instagram style) */}
       <div className="glass-card rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
         {/* Cover Photo */}
-        <div className="h-36 sm:h-48 w-full bg-gradient-to-r from-amber-600/30 via-rose-600/20 to-purple-600/30 relative overflow-hidden">
+        <div className="h-36 sm:h-48 w-full bg-gradient-to-r from-amber-600/30 via-rose-600/20 to-purple-600/30 relative overflow-hidden group">
           {profile?.cover_url ? (
             <img
               src={profile.cover_url}
@@ -72,10 +126,27 @@ export const ProfilePage: React.FC = () => {
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-white/20 text-xs">
-              <span>Add a cover photo in Edit Profile</span>
+            <div className="w-full h-full flex items-center justify-center text-white/30 text-xs">
+              <span>Tap 'Upload Banner' to personalize cover</span>
             </div>
           )}
+
+          {/* Quick upload banner button */}
+          <button
+            type="button"
+            onClick={() => bannerFileInputRef.current?.click()}
+            className="absolute bottom-3 right-3 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/80 backdrop-blur-md text-white text-xs font-medium flex items-center gap-1.5 transition-all border border-white/15 active:scale-95 cursor-pointer shadow-lg"
+          >
+            <Camera className="w-3.5 h-3.5 text-amber-300" />
+            <span>{profile?.cover_url ? 'Change Banner' : 'Upload Banner'}</span>
+          </button>
+          <input
+            ref={bannerFileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleDirectBannerUpload}
+          />
 
           <div className="absolute top-4 right-4 flex items-center gap-2">
             <Link
@@ -105,12 +176,20 @@ export const ProfilePage: React.FC = () => {
                 )}
               </div>
               <button
-                onClick={() => setEditModalOpen(true)}
-                className="absolute bottom-1 right-1 p-1.5 rounded-full bg-amber-500 text-black shadow-md hover:bg-amber-400 transition-transform active:scale-95"
-                title="Change Photo"
+                type="button"
+                onClick={() => avatarFileInputRef.current?.click()}
+                className="absolute bottom-1 right-1 p-2 rounded-full bg-amber-500 text-black shadow-lg hover:bg-amber-400 transition-transform active:scale-95 cursor-pointer"
+                title="Upload Profile Picture"
               >
                 <Camera className="w-3.5 h-3.5" />
               </button>
+              <input
+                ref={avatarFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleDirectAvatarUpload}
+              />
             </div>
 
             <button
@@ -387,26 +466,86 @@ export const ProfilePage: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-white/70 mb-1 font-medium">Avatar Image URL</label>
-                  <input
-                    type="url"
-                    value={avatarUrl}
-                    onChange={(e) => setAvatarUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-amber-400/50"
-                  />
+                {/* Avatar Direct File Upload */}
+                <div className="space-y-1.5">
+                  <label className="block text-white/70 font-medium">Profile Photo (Avatar)</label>
+                  <div className="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/10">
+                    <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 shrink-0 flex items-center justify-center text-amber-300 font-bold border border-white/10">
+                      {avatarUrl ? (
+                        <img src={avatarUrl} alt="Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-5 h-5 text-white/40" />
+                      )}
+                    </div>
+                    <div className="flex-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => modalAvatarInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Photo</span>
+                      </button>
+                      {avatarUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setAvatarUrl('')}
+                          className="p-1.5 rounded-xl bg-white/5 hover:bg-rose-500/20 text-white/60 hover:text-rose-300 border border-white/10 text-xs transition-all cursor-pointer"
+                          title="Remove Photo"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      ref={modalAvatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleModalAvatarUpload}
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-white/70 mb-1 font-medium">Cover Banner URL</label>
-                  <input
-                    type="url"
-                    value={coverUrl}
-                    onChange={(e) => setCoverUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-amber-400/50"
-                  />
+                {/* Banner Direct File Upload */}
+                <div className="space-y-1.5">
+                  <label className="block text-white/70 font-medium">Profile Banner (Cover)</label>
+                  <div className="space-y-2 p-3 rounded-2xl bg-white/5 border border-white/10">
+                    {coverUrl ? (
+                      <div className="h-20 w-full rounded-xl overflow-hidden relative border border-white/10">
+                        <img src={coverUrl} alt="Cover Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setCoverUrl('')}
+                          className="absolute top-1.5 right-1.5 p-1 rounded-lg bg-black/60 hover:bg-rose-500/80 text-white transition-all cursor-pointer"
+                          title="Remove Banner"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-14 w-full rounded-xl bg-white/5 border border-dashed border-white/15 flex items-center justify-center text-white/40 text-[11px]">
+                        No banner uploaded yet
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => modalCoverInputRef.current?.click()}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Banner</span>
+                      </button>
+                    </div>
+                    <input
+                      ref={modalCoverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleModalCoverUpload}
+                    />
+                  </div>
                 </div>
 
                 <div className="flex gap-2 pt-2">

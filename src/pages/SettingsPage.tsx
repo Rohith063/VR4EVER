@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -18,11 +18,14 @@ import {
   Image,
   Film,
   Mic,
+  Camera,
+  Upload,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useRelationship } from '../context/RelationshipContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAppLock } from '../context/AppLockContext';
+import { resizeAndCompressImage } from '../lib/utils';
 
 export const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -34,6 +37,8 @@ export const SettingsPage: React.FC = () => {
   // Profile edit state
   const [displayName, setDisplayName] = useState(profile?.display_name || '');
   const [bio, setBio] = useState(profile?.bio || '');
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
+  const [coverUrl, setCoverUrl] = useState(profile?.cover_url || '');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
 
@@ -53,7 +58,7 @@ export const SettingsPage: React.FC = () => {
   const [reminderTime, setReminderTime] = useState('09:00');
   const [soundAlerts, setSoundAlerts] = useState(true);
 
-  // Storage Stats (calculated or mock based on stored items)
+  // Storage Stats
   const [storageLimitMB] = useState(100);
   const [cacheCleared, setCacheCleared] = useState(false);
 
@@ -61,12 +66,41 @@ export const SettingsPage: React.FC = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
 
+  const settingsAvatarInputRef = useRef<HTMLInputElement>(null);
+  const settingsCoverInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await resizeAndCompressImage(file, 600, 600, 0.85);
+      setAvatarUrl(compressed);
+      await updateProfile({ avatar_url: compressed });
+    } catch (err) {
+      console.error('Failed to upload avatar', err);
+    }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressed = await resizeAndCompressImage(file, 1400, 600, 0.85);
+      setCoverUrl(compressed);
+      await updateProfile({ cover_url: compressed });
+    } catch (err) {
+      console.error('Failed to upload cover', err);
+    }
+  };
+
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingProfile(true);
     await updateProfile({
       display_name: displayName.trim() || profile?.display_name,
       bio: bio.trim() || undefined,
+      avatar_url: avatarUrl || undefined,
+      cover_url: coverUrl || undefined,
     });
     setSavingProfile(false);
     setProfileSuccess(true);
@@ -141,16 +175,66 @@ export const SettingsPage: React.FC = () => {
         </div>
 
         <form onSubmit={handleSaveProfile} className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-600 text-black font-serif text-2xl font-bold flex items-center justify-center shrink-0">
-              {profile?.display_name?.[0]?.toUpperCase() || 'U'}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="relative group">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-600 text-black font-serif text-2xl font-bold flex items-center justify-center shrink-0 overflow-hidden border-2 border-white/10 shadow-lg">
+                {avatarUrl || profile?.avatar_url ? (
+                  <img
+                    src={avatarUrl || profile?.avatar_url || ''}
+                    alt={profile?.display_name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  profile?.display_name?.[0]?.toUpperCase() || 'U'
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => settingsAvatarInputRef.current?.click()}
+                className="absolute -bottom-1 -right-1 p-1.5 rounded-xl bg-amber-500 text-black shadow-md hover:bg-amber-400 transition-transform active:scale-95 cursor-pointer"
+                title="Change Avatar"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
+              <input
+                ref={settingsAvatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
+              />
             </div>
+
             <div className="min-w-0 flex-1">
               <h3 className="font-bold text-white text-base truncate">
                 {profile?.display_name || 'User'}
               </h3>
               <p className="text-xs text-white/50">@{profile?.username || 'username'}</p>
-              <p className="text-xs text-white/40 truncate">{profile?.email || 'Guest Account'}</p>
+              <div className="flex items-center gap-2 mt-1.5">
+                <button
+                  type="button"
+                  onClick={() => settingsAvatarInputRef.current?.click()}
+                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Upload className="w-3 h-3 text-amber-400" />
+                  <span>Upload Avatar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => settingsCoverInputRef.current?.click()}
+                  className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer"
+                >
+                  <Camera className="w-3 h-3 text-amber-400" />
+                  <span>Upload Banner</span>
+                </button>
+                <input
+                  ref={settingsCoverInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleCoverUpload}
+                />
+              </div>
             </div>
           </div>
 
